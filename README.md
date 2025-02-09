@@ -2,15 +2,15 @@
 
 Mercury App Center is a centralized management system for mobile application distribution. It provides a secure and efficient way to manage, distribute, and track different versions of mobile applications (.apk, .ipa, .app).
 
-<img width="712" alt="image" src="https://github.com/user-attachments/assets/465c51c3-95e9-45f8-9cca-9faff1a73a68" />
+<img width="1255" alt="image" src="https://github.com/user-attachments/assets/802ff463-679f-47b0-b311-f8e8398a3743" />
 
-<img width="1528" alt="image" src="https://github.com/user-attachments/assets/8cef32f1-135a-4350-8afa-0f4f5aee778a" />
+<img width="1326" alt="image" src="https://github.com/user-attachments/assets/2bf2f765-74f2-46c6-b14a-41e18281622b" />
 
-<img width="710" alt="image" src="https://github.com/user-attachments/assets/81d691db-a890-4438-8596-3193c05b4acd" />
+<img width="1318" alt="image" src="https://github.com/user-attachments/assets/8174d8dd-90d5-43cf-8a80-2195fbc0312e" />
 
-<img width="1210" alt="image" src="https://github.com/user-attachments/assets/de31465e-d566-4ec6-8dd6-029f834dfc9c" />
+<img width="949" alt="image" src="https://github.com/user-attachments/assets/e832622e-0e27-4e64-9ff3-7ca1194b269b" />
 
-<img width="744" alt="image" src="https://github.com/user-attachments/assets/9abd07f2-e926-4602-94bd-13d29e37d6ad" />
+<img width="1277" alt="image" src="https://github.com/user-attachments/assets/8c648afb-0e90-4684-aba5-2453c4aa64fc" />
 
 ## Features
 
