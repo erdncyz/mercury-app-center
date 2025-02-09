@@ -209,10 +209,6 @@ app.post('/api/upload', (req, res) => {
             );
 
             if (existingVersion) {
-                // Dosyayı sil
-                if (req.file && req.file.path) {
-                    fs.unlinkSync(req.file.path);
-                }
                 return res.status(400).json({
                     success: false,
                     error: `Version ${version} already exists for ${platform}. Please use a different version number.`
