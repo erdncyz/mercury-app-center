@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mercury App Center</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="mercury-icon.png" type="image/png">
+</head>
+<body>
+    <div id="loginContainer" style="display: none;">
+        <div class="login-box">
+            <img src="mercury-icon.png" alt="Mercury Icon" class="login-icon">
+            <h2>Mercury App Center</h2>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <input type="text" id="username" placeholder="Username" required>
+                <input type="password" id="password" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="mainContainer" style="display: none;">
+        <header>
+            <div class="header-left">
+                <img src="mercury-icon.png" alt="Mercury Icon" class="header-icon">
+                <h1>Mercury App Center</h1>
+            </div>
+            <div class="header-right">
+                <span id="userDisplay"></span>
+                <button onclick="handleLogout()">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="Search apps..." oninput="filterUploads()">
+                <select id="osFilter" onchange="filterUploads()">
+                    <option value="all">All OS</option>
+                    <option value="ios">iOS</option>
+                    <option value="android">Android</option>
+                </select>
+            </div>
+
+            <div class="create-project">
+                <button onclick="showCreateProjectModal()">Create New Project</button>
+            </div>
+
+            <div id="allApps"></div>
+
+            <div id="createProjectModal" class="modal">
+                <div class="modal-content">
+                    <h2>Create New Project</h2>
+                    <form id="createProjectForm">
+                        <div class="form-group">
+                            <label>Project Name</label>
+                            <input type="text" id="projectNameInput" required>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="cancel-btn" onclick="closeModal('createProjectModal')">Cancel</button>
+                            <button type="submit" class="create-btn">Create</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div id="uploadModal" class="modal">
+                <div class="modal-content">
+                    <div class="upload-modal-header">
+                        <h2>Upload New Version</h2>
+                        <div class="project-name" id="uploadProjectName"></div>
+                    </div>
+                    <form id="uploadForm">
+                        <input type="hidden" id="projectIdInput" name="projectId">
+                        <div class="form-group">
+                            <label>Platform</label>
+                            <select id="platformSelect" name="platform" required>
+                                <option value="ios">iOS</option>
+                                <option value="android">Android</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Version</label>
+                            <input type="text" id="versionInput" name="version" required placeholder="1.0.0">
+                        </div>
+                        <div class="form-group">
+                            <label>Test Notes</label>
+                            <textarea id="testNotes" name="notes" rows="4"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>App File</label>
+                            <input type="file" id="appFile" name="file" required>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="cancel-btn" onclick="closeModal('uploadModal')">Cancel</button>
+                            <button type="submit" class="create-btn">Upload</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="background-icons"></div>
+
+    <script>
+        let currentPage = 1;
+        const itemsPerPage = 10;
+        let allVersions = [];
+        let filteredVersions = [];
+
+        window.onload = function() {
+            const isLoggedIn = sessionStorage.getItem('isLoggedIn');
+            if (isLoggedIn) {
+                checkLoginStatus();
+                updateUsername();
+                showAllApps();
+                showRecentUploads();
+            } else {
+                document.getElementById('loginContainer').style.display = 'block';
+                document.getElementById('mainContainer').style.display = 'none';
+            }
+        };
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('http://localhost:3000/login', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    sessionStorage.setItem('isLoggedIn', 'true');
+                    sessionStorage.setItem('username', data.user.username);
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('mainContainer').style.display = 'block';
+                    updateUsername();
+                    showAllApps();
+                    showRecentUploads();
+                } else {
+                    showNotification('Invalid username or password', 'error');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showNotification('Login failed', 'error');
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                const response = await fetch('http://localhost:3000/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    sessionStorage.removeItem('isLoggedIn');
+                    sessionStorage.removeItem('username');
+                    document.getElementById('loginContainer').style.display = 'block';
+                    document.getElementById('mainContainer').style.display = 'none';
+                    showNotification('Logged out successfully', 'success');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                showNotification('Logout failed', 'error');
+            }
+        }
+
+        function updateUsername() {
+            const username = sessionStorage.getItem('username');
+            if (username) {
+                document.getElementById('userDisplay').textContent = `Welcome, ${username}`;
+            }
+        }
+
+        async function checkLoginStatus() {
+            const isLoggedIn = sessionStorage.getItem('isLoggedIn');
+            if (!isLoggedIn) {
+                document.getElementById('loginContainer').style.display = 'block';
+                document.getElementById('mainContainer').style.display = 'none';
+            }
+        }
+
+        function showCreateProjectModal() {
+            const modal = document.getElementById('createProjectModal');
+            modal.style.display = 'flex';
+            document.getElementById('createProjectForm').reset();
+        }
+
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.style.display = 'none';
+        }
+
+        document.getElementById('createProjectForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            
+            const projectName = document.getElementById('projectNameInput').value;
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/projects', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: projectName })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('Project created successfully', 'success');
+                    closeModal('createProjectModal');
+                    showAllApps();
+                } else {
+                    showNotification(data.error || 'Failed to create project', 'error');
+                }
+            } catch (error) {
+                console.error('Project creation error:', error);
+                showNotification('Failed to create project', 'error');
+            }
+        });
+
+        async function showAllApps() {
+            try {
+                const response = await fetch('http://localhost:3000/api/projects', {
+                    credentials: 'include'
+                });
+                const projects = await response.json();
+                
+                const container = document.getElementById('allApps');
+                container.innerHTML = '';
+                
+                projects.forEach(project => {
+                    const card = document.createElement('div');
+                    card.className = 'app-card';
+                    card.setAttribute('onclick', 'toggleProject(event, this)');
+                    
+                    const platforms = {
+                        ios: project.versions.filter(v => v.platform === 'ios'),
+                        android: project.versions.filter(v => v.platform === 'android')
+                    };
+                    
+                    card.innerHTML = `
+                        <div class="app-header">
+                            <div class="app-title">${project.name}</div>
+                            <div class="app-actions">
+                                <button onclick="event.stopPropagation(); showUploadModal('${project.id}', '${project.name}')">Upload</button>
+                                <button onclick="event.stopPropagation(); deleteProject('${project.id}')">Delete</button>
+                            </div>
+                        </div>
+                        <div class="platform-container">
+                            ${platforms.ios.length > 0 ? `
+                                <div class="platform-item" onclick="togglePlatform(event, this, 'ios')">
+                                    <div class="platform-header">
+                                        <span>🍎 iOS</span>
+                                    </div>
+                                    <div class="platform-content">
+                                        ${platforms.ios.map(version => `
+                                            <div class="version-item">
+                                                <div class="version-info">
+                                                    <div class="version-header">
+                                                        <span class="version-number">v${version.version}</span>
+                                                        <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
+                                                    </div>
+                                                    <div class="version-uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
+                                                    <div class="version-notes">${version.notes}</div>
+                                                </div>
+                                                <div class="version-actions">
+                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">Download</button>
+                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">Delete</button>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            ${platforms.android.length > 0 ? `
+                                <div class="platform-item" onclick="togglePlatform(event, this, 'android')">
+                                    <div class="platform-header">
+                                        <span>🤖 Android</span>
+                                    </div>
+                                    <div class="platform-content">
+                                        ${platforms.android.map(version => `
+                                            <div class="version-item">
+                                                <div class="version-info">
+                                                    <div class="version-header">
+                                                        <span class="version-number">v${version.version}</span>
+                                                        <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
+                                                    </div>
+                                                    <div class="version-uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
+                                                    <div class="version-notes">${version.notes}</div>
+                                                </div>
+                                                <div class="version-actions">
+                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">Download</button>
+                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">Delete</button>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                    
+                    container.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error loading apps:', error);
+                showNotification('Failed to load apps', 'error');
+            }
+        }
+
+        async function deleteProject(projectId) {
+            showConfirmDialog('Are you sure you want to delete this project?', async () => {
+                try {
+                    const response = await fetch(`http://localhost:3000/api/projects/${projectId}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        showNotification('Project deleted successfully', 'success');
+                        showAllApps();
+                    } else {
+                        showNotification(data.error || 'Failed to delete project', 'error');
+                    }
+                } catch (error) {
+                    console.error('Delete error:', error);
+                    showNotification('Failed to delete project', 'error');
+                }
+            }, 'project');
+        }
+
+        function showConfirmDialog(message, onConfirm, type = 'project') {
+            const backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop';
+            
+            const dialog = document.createElement('div');
+            dialog.className = 'custom-confirm-dialog';
+            dialog.innerHTML = `
+                <h3>Delete ${type === 'project' ? 'Project' : 'Version'}</h3>
+                <p>${message}</p>
+                <div class="custom-confirm-actions">
+                    <button class="custom-confirm-cancel" onclick="closeConfirmDialog()">Cancel</button>
+                    <button class="custom-confirm-delete" onclick="handleConfirm()">Delete ${type === 'project' ? 'Project' : 'Version'}</button>
+                </div>
+            `;
+            
+            document.body.appendChild(backdrop);
+            document.body.appendChild(dialog);
+            
+            window.handleConfirm = () => {
+                onConfirm();
+                closeConfirmDialog();
+            };
+        }
+        
+        function closeConfirmDialog() {
+            const backdrop = document.querySelector('.modal-backdrop');
+            const dialog = document.querySelector('.custom-confirm-dialog');
+            if (backdrop) backdrop.remove();
+            if (dialog) dialog.remove();
+        }
+
+        function showUploadModal(projectId, projectName) {
+            const modal = document.getElementById('uploadModal');
+            document.getElementById('projectIdInput').value = projectId;
+            document.getElementById('uploadProjectName').textContent = `Project: ${projectName}`;
+            modal.style.display = 'flex';
+            document.getElementById('uploadForm').reset();
+        }
+
+        async function handleUpload(event) {
+            event.preventDefault();
+            
+            const form = event.target;
+            const formData = new FormData(form);
+            const projectId = document.getElementById('projectIdInput').value;
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/upload', {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('File uploaded successfully', 'success');
+                    closeModal('uploadModal');
+                    showAllApps();
+                    showRecentUploads();
+                } else {
+                    showNotification(data.error || 'Failed to upload file', 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showNotification('Failed to upload file', 'error');
+            }
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', handleUpload);
+
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        async function downloadVersion(projectId, versionId) {
+            try {
+                const response = await fetch(`http://localhost:3000/api/download/${projectId}/${versionId}`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to download file');
+                }
+
+                const blob = await response.blob();
+                
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                showNotification('Download started', 'success');
+            } catch (error) {
+                console.error('Download error:', error);
+                showNotification(error.message, 'error');
+            }
+        }
+
+        function toggleProject(event, element) {
+            if (event.target.closest('.platform-item') || 
+                event.target.closest('.app-actions')) {
+                return;
+            }
+            
+            const isActive = element.classList.contains('active');
+            
+            document.querySelectorAll('.app-card').forEach(card => {
+                if (card !== element) {
+                    card.classList.remove('active');
+                    card.style.maxHeight = '70px';
+                    const actions = card.querySelector('.app-actions');
+                    if (actions) {
+                        actions.style.opacity = '0';
+                        actions.style.visibility = 'hidden';
+                    }
+                }
+            });
+            
+            if (!isActive) {
+                element.classList.add('active');
+                element.style.maxHeight = '1000px';
+                const actions = element.querySelector('.app-actions');
+                if (actions) {
+                    actions.style.opacity = '1';
+                    actions.style.visibility = 'visible';
+                }
+            } else {
+                element.classList.remove('active');
+                element.style.maxHeight = '70px';
+                const actions = element.querySelector('.app-actions');
+                if (actions) {
+                    actions.style.opacity = '0';
+                    actions.style.visibility = 'hidden';
+                }
+            }
+        }
+
+        function togglePlatform(event, element, platform) {
+            event.stopPropagation();
+            const content = element.querySelector('.platform-content');
+            const wasActive = element.classList.contains('active');
+            
+            const parentCard = element.closest('.app-card');
+            parentCard.querySelectorAll('.platform-item').forEach(item => {
+                if (item !== element) {
+                    item.classList.remove('active');
+                    const itemContent = item.querySelector('.platform-content');
+                    itemContent.style.display = 'none';
+                    itemContent.style.maxHeight = '0';
+                    itemContent.style.opacity = '0';
+                }
+            });
+            
+            if (!wasActive) {
+                content.style.display = 'block';
+                element.classList.add('active');
+                setTimeout(() => {
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                    content.style.opacity = '1';
+                }, 0);
+            } else {
+                content.style.display = 'none';
+                element.classList.remove('active');
+                content.style.maxHeight = '0';
+                content.style.opacity = '0';
+            }
+        }
+
+        async function deleteVersion(projectId, versionId) {
+            showConfirmDialog('Are you sure you want to delete this version?', async () => {
+                try {
+                    const response = await fetch(`http://localhost:3000/api/projects/${projectId}/versions/${versionId}`, {
+                        method: 'DELETE',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showNotification('Version deleted successfully', 'success');
+                        await showAllApps();
+                        await showRecentUploads();
+                    } else {
+                        throw new Error(data.error || 'Failed to delete version');
+                    }
+                } catch (error) {
+                    console.error('Delete version error:', error);
+                    showNotification(error.message, 'error');
+                } finally {
+                    closeConfirmDialog();
+                }
+            }, 'version');
+        }
+
+        async function showRecentUploads() {
+            try {
+                const response = await fetch('http://localhost:3000/api/projects', {
+                    credentials: 'include'
+                });
+                const projects = await response.json();
+                
+                const fiveDaysAgo = new Date();
+                fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+                
+                allVersions = projects.reduce((versions, project) => {
+                    const projectVersions = project.versions.map(version => ({
+                        ...version,
+                        projectName: project.name,
+                        projectId: project.id
+                    }));
+                    return [...versions, ...projectVersions];
+                }, []);
+                
+                allVersions = allVersions
+                    .filter(version => new Date(version.uploadedAt) >= fiveDaysAgo)
+                    .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+                localStorage.setItem('recentUploads', JSON.stringify(allVersions));
+
+                filteredVersions = [];
+                currentPage = 1;
+
+                const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+                const osFilter = document.getElementById('osFilter').value;
+                const typeFilter = document.getElementById('typeFilter').value;
+
+                if (searchTerm || osFilter !== 'all' || typeFilter !== 'all') {
+                    filterUploads();
+                } else {
+                    updateRecentUploadsList();
+                }
+            } catch (error) {
+                console.error('Error loading recent uploads:', error);
+            }
+        }
+
+        function filterUploads() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const osFilter = document.getElementById('osFilter').value;
+            
+            filteredVersions = allVersions.filter(version => {
+                const matchesSearch = version.projectName.toLowerCase().includes(searchTerm) ||
+                                    version.version.toLowerCase().includes(searchTerm) ||
+                                    version.notes.toLowerCase().includes(searchTerm);
+                                    
+                const matchesOS = osFilter === 'all' || version.platform === osFilter;
+                
+                return matchesSearch && matchesOS;
+            });
+            
+            currentPage = 1;
+            updateRecentUploadsList();
+        }
+
+        function updateRecentUploadsList() {
+            const versionsToShow = filteredVersions.length > 0 ? filteredVersions : allVersions;
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const currentVersions = versionsToShow.slice(startIndex, endIndex);
+            
+            const container = document.getElementById('recentUploads');
+            if (container) {
+                container.innerHTML = currentVersions.map(version => `
+                    <div class="version-card">
+                        <div class="version-header">
+                            <span class="project-name">${version.projectName}</span>
+                            <span class="platform-badge ${version.platform}">${version.platform === 'ios' ? '🍎' : '🤖'} ${version.platform}</span>
+                        </div>
+                        <div class="version-details">
+                            <div class="version-number">v${version.version}</div>
+                            <div class="upload-time">${new Date(version.uploadedAt).toLocaleString()}</div>
+                            <div class="uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
+                            <div class="notes">${version.notes}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            updatePagination(versionsToShow.length);
+        }
+
+        function updatePagination(totalItems) {
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            const paginationContainer = document.getElementById('pagination');
+            
+            if (paginationContainer) {
+                let paginationHTML = '';
+                
+                if (totalPages > 1) {
+                    if (currentPage > 1) {
+                        paginationHTML += `<button onclick="changePage(${currentPage - 1})">Previous</button>`;
+                    }
+                    
+                    paginationHTML += `<span>Page ${currentPage}</span>`;
+                    
+                    if (currentPage < totalPages) {
+                        paginationHTML += `<button onclick="changePage(${currentPage + 1})">Next</button>`;
+                    }
+                }
+                
+                paginationContainer.innerHTML = paginationHTML;
+            }
+        }
+
+        function changePage(newPage) {
+            currentPage = newPage;
+            updateRecentUploadsList();
+        }
+    </script>
+</body>
+</html>
