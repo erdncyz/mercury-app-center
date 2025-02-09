@@ -1,6 +1,15 @@
-# ☿ Mercury App Center
+# Mercury App Center
 
-Mercury App Center is a centralized management system for mobile application distribution. It provides a secure and efficient way to manage, distribute, and track different versions of mobile applications (.apk, .ipa, .app).
+A centralized platform for managing and distributing mobile applications across different platforms and environments.
+
+## Features
+
+- Multi-platform support (iOS, Android, Apple TV, Android TV)
+- Environment-based versioning (Production, Test, Regression)
+- Secure file upload and download
+- Version history tracking
+- User authentication
+- Real-time updates
 
 <img width="1255" alt="image" src="https://github.com/user-attachments/assets/802ff463-679f-47b0-b311-f8e8398a3743" />
 

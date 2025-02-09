@@ -270,30 +270,36 @@ app.post('/api/upload', (req, res) => {
 
 app.get('/api/projects', async (req, res) => {
     try {
-        res.setHeader('Cache-Control', 'private, max-age=5');
-        res.setHeader('Content-Type', 'application/json');
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const startIndex = (page - 1) * limit;
 
         const projectsFile = './data/projects.json';
         if (!fs.existsSync(projectsFile)) {
-            const defaultData = { projects: [] };
-            fs.writeFileSync(projectsFile, JSON.stringify(defaultData, null, 2));
-            return res.json([]);
+            return res.json({ 
+                projects: [],
+                totalPages: 0,
+                currentPage: page
+            });
         }
 
-        const fileContent = fs.readFileSync(projectsFile, 'utf8');
-        if (!fileContent.trim()) {
-            const defaultData = { projects: [] };
-            fs.writeFileSync(projectsFile, JSON.stringify(defaultData, null, 2));
-            return res.json([]);
-        }
-
-        const data = JSON.parse(fileContent);
+        const data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
         const projects = data.projects || [];
+        
+        // En son yüklenenler en üstte olacak şekilde sırala
         projects.sort((a, b) => new Date(b.created) - new Date(a.created));
-        res.json(projects);
+        
+        const paginatedProjects = projects.slice(startIndex, startIndex + limit);
+        const totalPages = Math.ceil(projects.length / limit);
+
+        res.json({
+            projects: paginatedProjects,
+            totalPages,
+            currentPage: page
+        });
     } catch (error) {
         console.error('Error listing projects:', error);
-        res.json([]);
+        res.status(500).json({ error: 'Failed to load projects' });
     }
 });
 

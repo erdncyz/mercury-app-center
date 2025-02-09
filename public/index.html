@@ -316,17 +316,20 @@
             }
         });
 
-        async function showAllApps() {
+        async function showAllApps(page = 1) {
             try {
-                const response = await fetch('http://localhost:3000/api/projects', {
+                const response = await fetch(`http://localhost:3000/api/projects?page=${page}&limit=10`, {
                     credentials: 'include'
                 });
-                const projects = await response.json();
+                const data = await response.json();
                 
                 const container = document.getElementById('allApps');
-                container.innerHTML = '';
                 
-                projects.forEach(project => {
+                if (page === 1) {
+                    container.innerHTML = '';
+                }
+
+                data.projects.forEach(project => {
                     const card = document.createElement('div');
                     card.className = 'app-card';
                     card.setAttribute('onclick', 'toggleProject(event, this)');
@@ -558,13 +561,18 @@
                     container.appendChild(card);
                 });
 
-                if (container.children.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <h3>No projects yet</h3>
-                            <p>Create a project and upload your first app</p>
-                        </div>
+                // Sayfalama kontrollerini ekle
+                if (data.totalPages > 1) {
+                    const paginationDiv = document.createElement('div');
+                    paginationDiv.className = 'pagination';
+                    paginationDiv.innerHTML = `
+                        ${data.currentPage > 1 ? 
+                            `<button onclick="showAllApps(${data.currentPage - 1})">Previous</button>` : ''}
+                        <span>Page ${data.currentPage} of ${data.totalPages}</span>
+                        ${data.currentPage < data.totalPages ? 
+                            `<button onclick="showAllApps(${data.currentPage + 1})">Next</button>` : ''}
                     `;
+                    container.appendChild(paginationDiv);
                 }
             } catch (error) {
                 console.error('Error loading apps:', error);
@@ -988,6 +996,55 @@
             };
             // Eğer env değeri varsa ve labels içinde mevcutsa onu döndür, yoksa Unknown
             return env && labels[env] ? labels[env] : '❓ Unknown';
+        }
+
+        // Lazy loading için Intersection Observer ekleyelim
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const versionList = entry.target;
+                    loadVersions(versionList.dataset.projectId);
+                    observer.unobserve(versionList);
+                }
+            });
+        }, { threshold: 0.1 });
+
+        function loadVersions(projectId) {
+            const versionList = document.querySelector(`#versions-${projectId}`);
+            if (!versionList.children.length) {
+                // Versiyonları yükle
+                // ... versiyon yükleme kodu ...
+            }
+        }
+
+        // Versiyon yükleme fonksiyonunu güncelleyelim
+        function loadVersionsForProject(project, container) {
+            const platforms = {
+                ios: project.versions?.filter(v => v.platform === 'ios').slice(0, 5) || [],
+                android: project.versions?.filter(v => v.platform === 'android').slice(0, 5) || [],
+                tvos: project.versions?.filter(v => v.platform === 'tvos').slice(0, 5) || [],
+                androidtv: project.versions?.filter(v => v.platform === 'androidtv').slice(0, 5) || []
+            };
+
+            // Her platform için sadece son 5 versiyonu göster
+            Object.entries(platforms).forEach(([platform, versions]) => {
+                if (versions.length) {
+                    const platformDiv = document.createElement('div');
+                    platformDiv.className = 'platform-item';
+                    // ... platform içeriği ...
+                    
+                    // "Show More" butonu ekle
+                    if (project.versions.filter(v => v.platform === platform).length > 5) {
+                        const showMoreBtn = document.createElement('button');
+                        showMoreBtn.className = 'show-more-btn';
+                        showMoreBtn.textContent = 'Show More';
+                        showMoreBtn.onclick = () => loadMoreVersions(project.id, platform);
+                        platformDiv.appendChild(showMoreBtn);
+                    }
+                    
+                    container.appendChild(platformDiv);
+                }
+            });
         }
     </script>
 </body>
