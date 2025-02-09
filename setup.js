@@ -1,25 +1,38 @@
 const fs = require('fs');
 const path = require('path');
 
+// Proje kök dizinini al
+const rootDir = __dirname;
+
 const dirs = [
-    './data',
-    './uploads',
-    './uploads/icons',
-    './uploads/projects'
+    path.join(rootDir, 'data'),
+    path.join(rootDir, 'uploads'),
+    path.join(rootDir, 'uploads/icons'),
+    path.join(rootDir, 'uploads/projects')
 ];
 
+// Dizinleri oluştur
 dirs.forEach(dir => {
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-        console.log(`Created directory: ${dir}`);
+    try {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+            console.log(`Created directory: ${dir}`);
+        }
+    } catch (error) {
+        console.error(`Error creating directory ${dir}:`, error);
     }
 });
 
-const projectsFile = './data/projects.json';
+// Projects dosyasını oluştur
+const projectsFile = path.join(rootDir, 'data', 'projects.json');
 if (!fs.existsSync(projectsFile)) {
-    const defaultData = {
-        projects: []
-    };
-    fs.writeFileSync(projectsFile, JSON.stringify(defaultData, null, 2));
-    console.log('Created projects.json with default structure');
+    try {
+        const defaultData = {
+            projects: []
+        };
+        fs.writeFileSync(projectsFile, JSON.stringify(defaultData, null, 2), { mode: 0o644 });
+        console.log('Created projects.json with default structure');
+    } catch (error) {
+        console.error('Error creating projects.json:', error);
+    }
 } 

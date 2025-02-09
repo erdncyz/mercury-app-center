@@ -10,9 +10,14 @@ const app = express();
 
 app.use(session({
     secret: 'mercury-app-center-secret',
-    resave: false,
-    saveUninitialized: true,
-    cookie: { secure: false }
+    resave: true,
+    saveUninitialized: false,
+    cookie: { 
+        secure: false,
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        httpOnly: true
+    },
+    rolling: true
 }));
 
 const corsOptions = {
@@ -54,9 +59,9 @@ const storage = multer.diskStorage({
 const upload = multer({ 
     storage: storage,
     fileFilter: function (req, file, cb) {
-        const allowedTypes = ['.ipa', '.apk', '.app'];
-        const ext = path.extname(file.originalname).toLowerCase();
-        if (allowedTypes.includes(ext)) {
+        if (file.originalname.endsWith('.app') || 
+            file.originalname.endsWith('.ipa') || 
+            file.originalname.endsWith('.apk')) {
             cb(null, true);
         } else {
             cb(new Error('Invalid file type. Only .ipa, .apk, and .app files are allowed.'));
@@ -75,13 +80,18 @@ app.post('/api/projects', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Project name is required' });
         }
 
-        const projectsFile = './data/projects.json';
+        const projectsFile = path.join(__dirname, 'data', 'projects.json');
         let data = { projects: [] };
-        if (fs.existsSync(projectsFile)) {
-            const fileContent = fs.readFileSync(projectsFile, 'utf8');
-            if (fileContent.trim()) {
-                data = JSON.parse(fileContent);
+        
+        try {
+            if (fs.existsSync(projectsFile)) {
+                const fileContent = fs.readFileSync(projectsFile, 'utf8');
+                if (fileContent.trim()) {
+                    data = JSON.parse(fileContent);
+                }
             }
+        } catch (error) {
+            console.error('Error reading projects file:', error);
         }
 
         const newProject = {
@@ -95,21 +105,44 @@ app.post('/api/projects', async (req, res) => {
         if (!Array.isArray(data.projects)) {
             data.projects = [];
         }
-        data.projects.push(newProject);
 
+        // Proje dizinlerini oluştur
         const projectDir = path.join(__dirname, 'uploads', 'projects', name);
         const iosDir = path.join(projectDir, 'ios');
         const androidDir = path.join(projectDir, 'android');
-        
-        fs.mkdirSync(projectDir, { recursive: true });
-        fs.mkdirSync(iosDir, { recursive: true });
-        fs.mkdirSync(androidDir, { recursive: true });
+        const tvosDir = path.join(projectDir, 'tvos');
+        const androidtvDir = path.join(projectDir, 'androidtv');
 
-        fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
-        res.status(201).json({ success: true, project: newProject });
+        try {
+            // Tüm platform dizinlerini oluştur
+            if (!fs.existsSync(projectDir)) {
+                fs.mkdirSync(projectDir, { recursive: true, mode: 0o777 });
+                fs.mkdirSync(iosDir, { recursive: true, mode: 0o777 });
+                fs.mkdirSync(androidDir, { recursive: true, mode: 0o777 });
+                fs.mkdirSync(tvosDir, { recursive: true, mode: 0o777 });
+                fs.mkdirSync(androidtvDir, { recursive: true, mode: 0o777 });
+            }
+
+            // Projeyi listeye ekle
+            data.projects.push(newProject);
+
+            // Projects.json dosyasını güncelle
+            fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2), { mode: 0o666 });
+
+            res.status(201).json({ success: true, project: newProject });
+        } catch (error) {
+            console.error('Error creating project:', error);
+            res.status(500).json({ 
+                success: false, 
+                error: `Failed to create project: ${error.message}. Please check directory permissions.`
+            });
+        }
     } catch (error) {
         console.error('Project creation error:', error);
-        res.status(500).json({ success: false, error: 'Failed to create project: ' + error.message });
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to create project: ' + error.message 
+        });
     }
 });
 
@@ -140,40 +173,71 @@ app.delete('/api/projects/:projectId', async (req, res) => {
 });
 
 app.post('/api/upload', (req, res) => {
-    upload(req, res, async function(err) {
+    upload(req, res, function(err) {
         if (err) {
-            return res.status(400).json({ success: false, error: err.message });
+            console.error('Upload error:', err);
+            return res.status(400).json({
+                success: false,
+                error: err.message
+            });
         }
 
         try {
-            const { projectId, platform, version, notes } = req.body;
-            if (!projectId || !platform || !version || !req.file) {
-                return res.status(400).json({ success: false, error: 'Missing required fields' });
+            const { projectId, platform, version, notes, environment } = req.body;
+            
+            if (!projectId || !platform || !version || !environment) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Missing required fields' 
+                });
             }
 
-            const projectsFile = './data/projects.json';
+            const projectsFile = path.join(__dirname, 'data', 'projects.json');
             let data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
             const project = data.projects.find(p => p.id === projectId);
             
             if (!project) {
-                return res.status(404).json({ success: false, error: 'Project not found' });
+                return res.status(404).json({ 
+                    success: false, 
+                    error: 'Project not found' 
+                });
             }
 
+            // Versiyon kontrolü - aynı versiyon ve platform varsa hata ver
+            const existingVersion = project.versions?.find(v => 
+                v.version === version && v.platform === platform.toLowerCase()
+            );
+
+            if (existingVersion) {
+                // Dosyayı sil
+                if (req.file && req.file.path) {
+                    fs.unlinkSync(req.file.path);
+                }
+                return res.status(400).json({
+                    success: false,
+                    error: `Version ${version} already exists for ${platform}. Please use a different version number.`
+                });
+            }
+
+            // Yeni versiyon için devam et
+            const fileName = `${version}-${req.file.originalname}`;
             const projectDir = path.join(__dirname, 'uploads', 'projects', project.name);
             const platformDir = path.join(projectDir, platform.toLowerCase());
-
+            
+            // Dizinleri oluştur
             fs.mkdirSync(projectDir, { recursive: true });
             fs.mkdirSync(platformDir, { recursive: true });
 
-            const fileName = `${version}-${req.file.originalname}`;
+            // Dosyayı kopyala
             const filePath = path.join(platformDir, fileName);
             fs.copyFileSync(req.file.path, filePath);
-            fs.unlinkSync(req.file.path);
+            fs.unlinkSync(req.file.path); // Geçici dosyayı sil
 
             const newVersion = {
                 id: Date.now().toString(),
                 platform: platform.toLowerCase(),
                 version,
+                environment,
                 notes,
                 file: fileName,
                 uploadedBy: req.session.username,
@@ -183,12 +247,27 @@ app.post('/api/upload', (req, res) => {
             if (!Array.isArray(project.versions)) {
                 project.versions = [];
             }
+
             project.versions.push(newVersion);
+            project.versions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+            
             fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
-            res.json({ success: true, version: newVersion });
+            
+            res.json({ 
+                success: true, 
+                version: newVersion 
+            });
+
         } catch (error) {
+            // Hata durumunda geçici dosyayı temizle
+            if (req.file && req.file.path) {
+                fs.unlinkSync(req.file.path);
+            }
             console.error('Upload error:', error);
-            res.status(500).json({ success: false, error: 'Failed to upload file: ' + error.message });
+            res.status(500).json({ 
+                success: false, 
+                error: 'Failed to upload file: ' + error.message 
+            });
         }
     });
 });
@@ -263,14 +342,13 @@ app.get('/api/download/:projectId/:versionId', (req, res) => {
 app.delete('/api/projects/:projectId/versions/:versionId', async (req, res) => {
     try {
         const { projectId, versionId } = req.params;
-        const projectsFile = './data/projects.json';
+        const projectsFile = path.join(__dirname, 'data', 'projects.json');
         
         if (!req.session.username) {
             return res.status(401).json({ success: false, error: 'User not authenticated' });
         }
 
-        const fileContent = fs.readFileSync(projectsFile, 'utf8');
-        let data = JSON.parse(fileContent);
+        let data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
         const project = data.projects.find(p => p.id === projectId);
         
         if (!project) {
@@ -285,6 +363,7 @@ app.delete('/api/projects/:projectId/versions/:versionId', async (req, res) => {
         const version = project.versions[versionIndex];
         const filePath = path.join(__dirname, 'uploads', 'projects', project.name, version.platform, version.file);
         
+        // Sadece dosyayı sil, klasörü değil
         if (fs.existsSync(filePath)) {
             try {
                 fs.unlinkSync(filePath);
@@ -293,8 +372,12 @@ app.delete('/api/projects/:projectId/versions/:versionId', async (req, res) => {
             }
         }
         
+        // Versiyonu projeden kaldır
         project.versions.splice(versionIndex, 1);
+        
+        // Projeyi güncelle
         fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
+        
         res.status(200).json({ success: true, message: 'Version deleted successfully' });
     } catch (error) {
         console.error('Delete version error:', error);
@@ -307,12 +390,18 @@ app.post('/login', async (req, res) => {
     if (username === 'admin' && password === 'admin') {
         req.session.username = username;
         req.session.isAuthenticated = true;
-        res.json({
-            success: true,
-            user: {
-                username: username,
-                displayName: username
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ success: false, message: 'Login failed' });
             }
+            res.json({
+                success: true,
+                user: {
+                    username: username,
+                    displayName: username
+                }
+            });
         });
     } else {
         res.status(401).json({
@@ -330,6 +419,19 @@ app.post('/logout', (req, res) => {
         }
         res.json({ success: true, message: 'Logged out successfully' });
     });
+});
+
+app.get('/api/check-session', (req, res) => {
+    if (req.session && req.session.username) {
+        res.json({
+            isLoggedIn: true,
+            username: req.session.username
+        });
+    } else {
+        res.json({
+            isLoggedIn: false
+        });
+    }
 });
 
 const PORT = process.env.PORT || 3000;

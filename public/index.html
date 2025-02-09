@@ -8,9 +8,9 @@
     <link rel="icon" href="mercury-icon.png" type="image/png">
 </head>
 <body>
-    <div id="loginContainer" style="display: none;">
+    <div id="loginContainer">
         <div class="login-box">
-            <img src="mercury-icon.png" alt="Mercury Icon" class="login-icon">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'%3E%3Cpath d='M12 2c-4.4 0-8 3.6-8 8s3.6 8 8 8 8-3.6 8-8-3.6-8-8-8zm0 14c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6z'/%3E%3Ccircle cx='12' cy='8' r='2'/%3E%3Crect x='11' y='10' width='2' height='6'/%3E%3Crect x='11' y='16' width='2' height='2'/%3E%3C/svg%3E" alt="Mercury Icon" class="login-icon">
             <h2>Mercury App Center</h2>
             <form id="loginForm" onsubmit="handleLogin(event)">
                 <input type="text" id="username" placeholder="Username" required>
@@ -18,6 +18,7 @@
                 <button type="submit">Login</button>
             </form>
         </div>
+        <div class="background-icons"></div>
     </div>
 
     <div id="mainContainer" style="display: none;">
@@ -39,6 +40,8 @@
                     <option value="all">All OS</option>
                     <option value="ios">iOS</option>
                     <option value="android">Android</option>
+                    <option value="tvos">Apple TV</option>
+                    <option value="androidtv">Android TV</option>
                 </select>
             </div>
 
@@ -77,6 +80,8 @@
                             <select id="platformSelect" name="platform" required>
                                 <option value="ios">iOS</option>
                                 <option value="android">Android</option>
+                                <option value="tvos">Apple TV</option>
+                                <option value="androidtv">Android TV</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -86,6 +91,14 @@
                         <div class="form-group">
                             <label>Test Notes</label>
                             <textarea id="testNotes" name="notes" rows="4"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Environment</label>
+                            <select id="environmentSelect" name="environment" required>
+                                <option value="production">Production (Market)</option>
+                                <option value="test">Test</option>
+                                <option value="regression">Regression</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>App File</label>
@@ -101,22 +114,45 @@
         </main>
     </div>
 
-    <div class="background-icons"></div>
-
     <script>
         let currentPage = 1;
         const itemsPerPage = 10;
         let allVersions = [];
         let filteredVersions = [];
 
-        window.onload = function() {
-            const isLoggedIn = sessionStorage.getItem('isLoggedIn');
-            if (isLoggedIn) {
-                checkLoginStatus();
-                updateUsername();
-                showAllApps();
-                showRecentUploads();
-            } else {
+        window.onload = async function() {
+            try {
+                const sessionResponse = await fetch('http://localhost:3000/api/check-session', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const sessionData = await sessionResponse.json();
+                
+                if (sessionData.isLoggedIn) {
+                    // Session aktif ise
+                    localStorage.setItem('isLoggedIn', 'true');
+                    localStorage.setItem('username', sessionData.username);
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('mainContainer').style.display = 'block';
+                    updateUsername();
+                    showAllApps();
+                } else {
+                    // Session aktif değilse
+                    localStorage.removeItem('isLoggedIn');
+                    localStorage.removeItem('username');
+                    document.getElementById('loginContainer').style.display = 'block';
+                    document.getElementById('mainContainer').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Session check error:', error);
+                // Hata durumunda login sayfasını göster
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('username');
                 document.getElementById('loginContainer').style.display = 'block';
                 document.getElementById('mainContainer').style.display = 'none';
             }
@@ -124,6 +160,8 @@
 
         async function handleLogin(event) {
             event.preventDefault();
+            removeLoginError();
+            
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
 
@@ -139,19 +177,54 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    sessionStorage.setItem('isLoggedIn', 'true');
-                    sessionStorage.setItem('username', data.user.username);
+                    localStorage.setItem('isLoggedIn', 'true');
+                    localStorage.setItem('username', data.user.username);
                     document.getElementById('loginContainer').style.display = 'none';
                     document.getElementById('mainContainer').style.display = 'block';
                     updateUsername();
                     showAllApps();
-                    showRecentUploads();
                 } else {
-                    showNotification('Invalid username or password', 'error');
+                    showLoginError('Invalid username or password');
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                showNotification('Login failed', 'error');
+                showLoginError('Login failed. Please try again.');
+            }
+        }
+
+        function showLoginError(message) {
+            // Önce varolan hata mesajını temizle
+            removeLoginError();
+            
+            const loginForm = document.getElementById('loginForm');
+            const submitButton = loginForm.querySelector('button[type="submit"]');
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'login-error';
+            
+            const errorIcon = document.createElement('div');
+            errorIcon.className = 'login-error-icon';
+            errorIcon.innerHTML = `
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            `;
+            
+            const errorMessage = document.createElement('span');
+            errorMessage.textContent = message;
+            
+            errorDiv.appendChild(errorIcon);
+            errorDiv.appendChild(errorMessage);
+            
+            // Hata mesajını login butonundan önce ekle
+            loginForm.insertBefore(errorDiv, submitButton);
+        }
+
+        function removeLoginError() {
+            const existingError = document.querySelector('.login-error');
+            if (existingError) {
+                existingError.remove();
             }
         }
 
@@ -164,8 +237,8 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    sessionStorage.removeItem('isLoggedIn');
-                    sessionStorage.removeItem('username');
+                    localStorage.removeItem('isLoggedIn');
+                    localStorage.removeItem('username');
                     document.getElementById('loginContainer').style.display = 'block';
                     document.getElementById('mainContainer').style.display = 'none';
                     showNotification('Logged out successfully', 'success');
@@ -177,15 +250,27 @@
         }
 
         function updateUsername() {
-            const username = sessionStorage.getItem('username');
+            const username = localStorage.getItem('username');
             if (username) {
                 document.getElementById('userDisplay').textContent = `Welcome, ${username}`;
             }
         }
 
         async function checkLoginStatus() {
-            const isLoggedIn = sessionStorage.getItem('isLoggedIn');
-            if (!isLoggedIn) {
+            try {
+                const response = await fetch('http://localhost:3000/api/check-session', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (!data.isLoggedIn) {
+                    localStorage.removeItem('isLoggedIn');
+                    localStorage.removeItem('username');
+                    document.getElementById('loginContainer').style.display = 'block';
+                    document.getElementById('mainContainer').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Login status check error:', error);
                 document.getElementById('loginContainer').style.display = 'block';
                 document.getElementById('mainContainer').style.display = 'none';
             }
@@ -246,68 +331,225 @@
                     card.className = 'app-card';
                     card.setAttribute('onclick', 'toggleProject(event, this)');
                     
+                    // Versiyonları unique hale getir
+                    const uniqueVersions = project.versions ? project.versions.reduce((acc, current) => {
+                        const x = acc.find(item => item.version === current.version && item.platform === current.platform);
+                        if (!x) {
+                            return acc.concat([current]);
+                        } else {
+                            // Eğer aynı versiyon varsa, daha yeni olanı kullan
+                            if (new Date(current.uploadedAt) > new Date(x.uploadedAt)) {
+                                const index = acc.indexOf(x);
+                                acc[index] = current;
+                            }
+                            return acc;
+                        }
+                    }, []) : [];
+
+                    // Versiyonları tarihe göre sırala (en yeni en üstte)
+                    uniqueVersions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
                     const platforms = {
-                        ios: project.versions.filter(v => v.platform === 'ios'),
-                        android: project.versions.filter(v => v.platform === 'android')
+                        ios: uniqueVersions.filter(v => v.platform === 'ios'),
+                        android: uniqueVersions.filter(v => v.platform === 'android'),
+                        tvos: uniqueVersions.filter(v => v.platform === 'tvos'),
+                        androidtv: uniqueVersions.filter(v => v.platform === 'androidtv')
                     };
                     
                     card.innerHTML = `
                         <div class="app-header">
                             <div class="app-title">${project.name}</div>
                             <div class="app-actions">
-                                <button onclick="event.stopPropagation(); showUploadModal('${project.id}', '${project.name}')">Upload</button>
-                                <button onclick="event.stopPropagation(); deleteProject('${project.id}')">Delete</button>
+                                <button onclick="event.stopPropagation(); showUploadModal('${project.id}', '${project.name}')">
+                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                                    </svg>
+                                    Upload .ipa/.apk/.app
+                                </button>
+                                <button onclick="event.stopPropagation(); deleteProject('${project.id}')">
+                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                    Delete
+                                </button>
                             </div>
                         </div>
                         <div class="platform-container">
                             ${platforms.ios.length > 0 ? `
-                                <div class="platform-item" onclick="togglePlatform(event, this, 'ios')">
+                                <div class="platform-item">
                                     <div class="platform-header">
                                         <span>🍎 iOS</span>
                                     </div>
-                                    <div class="platform-content">
-                                        ${platforms.ios.map(version => `
-                                            <div class="version-item">
+                                    ${platforms.ios.map(version => `
+                                        <div class="version-item" onclick="toggleVersion(event, this)">
+                                            <div class="version-header">
+                                                <div class="version-title">
+                                                    <span class="version-number">v${version.version || 'N/A'}</span>
+                                                    <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
+                                                </div>
+                                                <div class="version-toggle">▼</div>
+                                            </div>
+                                            <div class="version-content">
                                                 <div class="version-info">
-                                                    <div class="version-header">
-                                                        <span class="version-number">v${version.version}</span>
-                                                        <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
-                                                    </div>
                                                     <div class="version-uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
-                                                    <div class="version-notes">${version.notes}</div>
+                                                    <div class="version-environment-info">
+                                                        <span class="environment-label">Environment:</span>
+                                                        <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    </div>
+                                                    <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
-                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">Download</button>
-                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">Delete</button>
+                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                                        </svg>
+                                                        Download
+                                                    </button>
+                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
+                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                        </svg>
+                                                        Delete
+                                                    </button>
                                                 </div>
                                             </div>
-                                        `).join('')}
-                                    </div>
+                                        </div>
+                                    `).join('')}
                                 </div>
                             ` : ''}
                             ${platforms.android.length > 0 ? `
-                                <div class="platform-item" onclick="togglePlatform(event, this, 'android')">
+                                <div class="platform-item">
                                     <div class="platform-header">
                                         <span>🤖 Android</span>
                                     </div>
-                                    <div class="platform-content">
-                                        ${platforms.android.map(version => `
-                                            <div class="version-item">
+                                    ${platforms.android.map(version => `
+                                        <div class="version-item" onclick="toggleVersion(event, this)">
+                                            <div class="version-header">
+                                                <div class="version-title">
+                                                    <span class="version-number">v${version.version || 'N/A'}</span>
+                                                    <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
+                                                </div>
+                                                <div class="version-toggle">▼</div>
+                                            </div>
+                                            <div class="version-content">
                                                 <div class="version-info">
-                                                    <div class="version-header">
-                                                        <span class="version-number">v${version.version}</span>
-                                                        <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
-                                                    </div>
                                                     <div class="version-uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
-                                                    <div class="version-notes">${version.notes}</div>
+                                                    <div class="version-environment-info">
+                                                        <span class="environment-label">Environment:</span>
+                                                        <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    </div>
+                                                    <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
-                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">Download</button>
-                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">Delete</button>
+                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                                        </svg>
+                                                        Download
+                                                    </button>
+                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
+                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                        </svg>
+                                                        Delete
+                                                    </button>
                                                 </div>
                                             </div>
-                                        `).join('')}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                            ${platforms.tvos.length > 0 ? `
+                                <div class="platform-item">
+                                    <div class="platform-header">
+                                        <span>📺 Apple TV</span>
                                     </div>
+                                    ${platforms.tvos.map(version => `
+                                        <div class="version-item" onclick="toggleVersion(event, this)">
+                                            <div class="version-header">
+                                                <div class="version-title">
+                                                    <span class="version-number">v${version.version || 'N/A'}</span>
+                                                    <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
+                                                </div>
+                                                <div class="version-toggle">▼</div>
+                                            </div>
+                                            <div class="version-content">
+                                                <div class="version-info">
+                                                    <div class="version-uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
+                                                    <div class="version-environment-info">
+                                                        <span class="environment-label">Environment:</span>
+                                                        <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    </div>
+                                                    <div class="version-notes">${version.notes || 'No notes'}</div>
+                                                </div>
+                                                <div class="version-actions">
+                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                                        </svg>
+                                                        Download
+                                                    </button>
+                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
+                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                        </svg>
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                            ${platforms.androidtv.length > 0 ? `
+                                <div class="platform-item">
+                                    <div class="platform-header">
+                                        <span>📺 Android TV</span>
+                                    </div>
+                                    ${platforms.androidtv.map(version => `
+                                        <div class="version-item" onclick="toggleVersion(event, this)">
+                                            <div class="version-header">
+                                                <div class="version-title">
+                                                    <span class="version-number">v${version.version || 'N/A'}</span>
+                                                    <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
+                                                </div>
+                                                <div class="version-toggle">▼</div>
+                                            </div>
+                                            <div class="version-content">
+                                                <div class="version-info">
+                                                    <div class="version-uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
+                                                    <div class="version-environment-info">
+                                                        <span class="environment-label">Environment:</span>
+                                                        <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    </div>
+                                                    <div class="version-notes">${version.notes || 'No notes'}</div>
+                                                </div>
+                                                <div class="version-actions">
+                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                                        </svg>
+                                                        Download
+                                                    </button>
+                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
+                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                        </svg>
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                            ${(!platforms.ios.length && !platforms.android.length && !platforms.tvos.length && !platforms.androidtv.length) ? `
+                                <div class="empty-platform-message">
+                                    <p>No versions uploaded yet</p>
                                 </div>
                             ` : ''}
                         </div>
@@ -315,6 +557,15 @@
                     
                     container.appendChild(card);
                 });
+
+                if (container.children.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <h3>No projects yet</h3>
+                            <p>Create a project and upload your first app</p>
+                        </div>
+                    `;
+                }
             } catch (error) {
                 console.error('Error loading apps:', error);
                 showNotification('Failed to load apps', 'error');
@@ -345,21 +596,45 @@
 
         function showConfirmDialog(message, onConfirm, type = 'project') {
             const backdrop = document.createElement('div');
-            backdrop.className = 'modal-backdrop';
+            backdrop.className = 'confirm-dialog-backdrop';
             
             const dialog = document.createElement('div');
-            dialog.className = 'custom-confirm-dialog';
+            dialog.className = 'confirm-dialog';
             dialog.innerHTML = `
                 <h3>Delete ${type === 'project' ? 'Project' : 'Version'}</h3>
                 <p>${message}</p>
-                <div class="custom-confirm-actions">
-                    <button class="custom-confirm-cancel" onclick="closeConfirmDialog()">Cancel</button>
-                    <button class="custom-confirm-delete" onclick="handleConfirm()">Delete ${type === 'project' ? 'Project' : 'Version'}</button>
+                <div class="confirm-dialog-actions">
+                    <button class="confirm-dialog-cancel" onclick="closeConfirmDialog()">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                        Cancel
+                    </button>
+                    <button class="confirm-dialog-delete" onclick="handleConfirm()">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Delete
+                    </button>
                 </div>
             `;
             
             document.body.appendChild(backdrop);
             document.body.appendChild(dialog);
+            
+            // Arka plana tıklandığında dialogu kapat
+            backdrop.addEventListener('click', (e) => {
+                if (e.target === backdrop) {
+                    closeConfirmDialog();
+                }
+            });
+            
+            // ESC tuşuna basıldığında dialogu kapat
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeConfirmDialog();
+                }
+            });
             
             window.handleConfirm = () => {
                 onConfirm();
@@ -368,8 +643,8 @@
         }
         
         function closeConfirmDialog() {
-            const backdrop = document.querySelector('.modal-backdrop');
-            const dialog = document.querySelector('.custom-confirm-dialog');
+            const backdrop = document.querySelector('.confirm-dialog-backdrop');
+            const dialog = document.querySelector('.confirm-dialog');
             if (backdrop) backdrop.remove();
             if (dialog) dialog.remove();
         }
@@ -387,7 +662,15 @@
             
             const form = event.target;
             const formData = new FormData(form);
+            
+            // Environment değerini formData'ya ekleyelim
+            const environment = document.getElementById('environmentSelect').value;
+            formData.set('environment', environment);
+            
             const projectId = document.getElementById('projectIdInput').value;
+            
+            // Upload error mesajını temizle
+            removeUploadError();
             
             try {
                 const response = await fetch('http://localhost:3000/api/upload', {
@@ -402,26 +685,92 @@
                     showNotification('File uploaded successfully', 'success');
                     closeModal('uploadModal');
                     showAllApps();
-                    showRecentUploads();
                 } else {
-                    showNotification(data.error || 'Failed to upload file', 'error');
+                    showUploadError(data.error || 'Failed to upload file');
                 }
             } catch (error) {
                 console.error('Upload error:', error);
-                showNotification('Failed to upload file', 'error');
+                showUploadError('Failed to upload file');
             }
         }
 
         document.getElementById('uploadForm').addEventListener('submit', handleUpload);
 
+        function showUploadError(message) {
+            removeUploadError();
+            
+            const uploadForm = document.getElementById('uploadForm');
+            const fileInput = document.getElementById('appFile');
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'upload-error';
+            errorDiv.innerHTML = `
+                <div class="upload-error-icon">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <span>${message}</span>
+            `;
+            
+            fileInput.parentNode.insertBefore(errorDiv, fileInput.nextSibling);
+        }
+
+        function removeUploadError() {
+            const existingError = document.querySelector('.upload-error');
+            if (existingError) {
+                existingError.remove();
+            }
+        }
+
         function showNotification(message, type = 'success') {
+            // Form elementini bulalım
+            const loginForm = document.getElementById('loginForm');
+            
+            // Varolan notification container'ı bulalım veya oluşturalım
+            let container = document.querySelector('.notification-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'notification-container';
+                // Container'ı login butonundan önce ekleyelim
+                loginForm.insertBefore(container, loginForm.querySelector('button'));
+            }
+
+            // Önceki bildirimleri temizleyelim
+            container.innerHTML = '';
+
+            // Yeni bildirimi oluşturalım
             const notification = document.createElement('div');
             notification.className = `notification ${type}`;
-            notification.textContent = message;
-            document.body.appendChild(notification);
 
+            const icon = document.createElement('div');
+            icon.className = 'notification-icon';
+            icon.innerHTML = type === 'success' 
+                ? `<svg fill="none" viewBox="0 0 24 24" stroke="#10b981">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                   </svg>`
+                : `<svg fill="none" viewBox="0 0 24 24" stroke="#ef4444">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                   </svg>`;
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'notification-message';
+            messageDiv.textContent = message;
+
+            notification.appendChild(icon);
+            notification.appendChild(messageDiv);
+            container.appendChild(notification);
+
+            // 3 saniye sonra bildirimi kaldıralım
             setTimeout(() => {
-                notification.remove();
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    notification.remove();
+                    if (container.children.length === 0) {
+                        container.remove();
+                    }
+                }, 300);
             }, 3000);
         }
 
@@ -457,73 +806,36 @@
         }
 
         function toggleProject(event, element) {
-            if (event.target.closest('.platform-item') || 
-                event.target.closest('.app-actions')) {
+            if (event.target.closest('.app-actions') || 
+                event.target.closest('.version-actions')) {
                 return;
             }
             
-            const isActive = element.classList.contains('active');
+            const wasActive = element.classList.contains('active');
             
             document.querySelectorAll('.app-card').forEach(card => {
                 if (card !== element) {
                     card.classList.remove('active');
-                    card.style.maxHeight = '70px';
-                    const actions = card.querySelector('.app-actions');
-                    if (actions) {
-                        actions.style.opacity = '0';
-                        actions.style.visibility = 'hidden';
-                    }
                 }
             });
             
-            if (!isActive) {
-                element.classList.add('active');
-                element.style.maxHeight = '1000px';
-                const actions = element.querySelector('.app-actions');
-                if (actions) {
-                    actions.style.opacity = '1';
-                    actions.style.visibility = 'visible';
-                }
-            } else {
-                element.classList.remove('active');
-                element.style.maxHeight = '70px';
-                const actions = element.querySelector('.app-actions');
-                if (actions) {
-                    actions.style.opacity = '0';
-                    actions.style.visibility = 'hidden';
-                }
-            }
+            element.classList.toggle('active', !wasActive);
         }
 
-        function togglePlatform(event, element, platform) {
-            event.stopPropagation();
-            const content = element.querySelector('.platform-content');
+        function toggleVersion(event, element) {
+            event.stopPropagation(); // Projenin toggle'ını engellemek için
+            
             const wasActive = element.classList.contains('active');
             
-            const parentCard = element.closest('.app-card');
-            parentCard.querySelectorAll('.platform-item').forEach(item => {
-                if (item !== element) {
-                    item.classList.remove('active');
-                    const itemContent = item.querySelector('.platform-content');
-                    itemContent.style.display = 'none';
-                    itemContent.style.maxHeight = '0';
-                    itemContent.style.opacity = '0';
+            // Aynı seviyedeki diğer versiyonları kapat
+            const siblings = element.parentElement.querySelectorAll('.version-item');
+            siblings.forEach(sibling => {
+                if (sibling !== element) {
+                    sibling.classList.remove('active');
                 }
             });
             
-            if (!wasActive) {
-                content.style.display = 'block';
-                element.classList.add('active');
-                setTimeout(() => {
-                    content.style.maxHeight = content.scrollHeight + 'px';
-                    content.style.opacity = '1';
-                }, 0);
-            } else {
-                content.style.display = 'none';
-                element.classList.remove('active');
-                content.style.maxHeight = '0';
-                content.style.opacity = '0';
-            }
+            element.classList.toggle('active', !wasActive);
         }
 
         async function deleteVersion(projectId, versionId) {
@@ -604,21 +916,23 @@
         }
 
         function filterUploads() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const searchText = document.getElementById('searchInput').value.toLowerCase();
             const osFilter = document.getElementById('osFilter').value;
             
-            filteredVersions = allVersions.filter(version => {
-                const matchesSearch = version.projectName.toLowerCase().includes(searchTerm) ||
-                                    version.version.toLowerCase().includes(searchTerm) ||
-                                    version.notes.toLowerCase().includes(searchTerm);
-                                    
-                const matchesOS = osFilter === 'all' || version.platform === osFilter;
-                
-                return matchesSearch && matchesOS;
+            document.querySelectorAll('.app-card').forEach(card => {
+                const title = card.querySelector('.app-title').textContent.toLowerCase();
+                const hasMatchingVersion = Array.from(card.querySelectorAll('.platform-item')).some(platform => {
+                    const platformType = platform.querySelector('.platform-header').textContent.toLowerCase();
+                    return osFilter === 'all' || 
+                           (osFilter === 'ios' && platformType.includes('ios')) ||
+                           (osFilter === 'android' && platformType.includes('android') && !platformType.includes('tv')) ||
+                           (osFilter === 'tvos' && platformType.includes('apple tv')) ||
+                           (osFilter === 'androidtv' && platformType.includes('android tv'));
+                });
+
+                const matchesSearch = title.includes(searchText);
+                card.style.display = (matchesSearch && (osFilter === 'all' || hasMatchingVersion)) ? 'block' : 'none';
             });
-            
-            currentPage = 1;
-            updateRecentUploadsList();
         }
 
         function updateRecentUploadsList() {
@@ -633,7 +947,7 @@
                     <div class="version-card">
                         <div class="version-header">
                             <span class="project-name">${version.projectName}</span>
-                            <span class="platform-badge ${version.platform}">${version.platform === 'ios' ? '🍎' : '🤖'} ${version.platform}</span>
+                            <span class="platform-badge ${version.platform}">${version.platform === 'ios' ? '🍎' : version.platform === 'android' ? '🤖' : version.platform === 'tvos' ? '📺' : '📺'} ${version.platform}</span>
                         </div>
                         <div class="version-details">
                             <div class="version-number">v${version.version}</div>
@@ -674,6 +988,16 @@
         function changePage(newPage) {
             currentPage = newPage;
             updateRecentUploadsList();
+        }
+
+        function getEnvironmentLabel(env) {
+            const labels = {
+                'production': '🚀 Market',
+                'test': '🧪 Test',
+                'regression': '🔄 Regression'
+            };
+            // Eğer env değeri varsa ve labels içinde mevcutsa onu döndür, yoksa Unknown
+            return env && labels[env] ? labels[env] : '❓ Unknown';
         }
     </script>
 </body>

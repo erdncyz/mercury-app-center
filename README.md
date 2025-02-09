@@ -62,8 +62,30 @@ mkdir -p uploads/icons uploads/projects data
 chmod 755 uploads
 ```
 
+if encounter any permission issues, run the following commands:
+
+```bash
+# Önce projenin olduğu dizine gidelim
+cd /Users/erdincyilmaz/Desktop/mercury-app-center
+
+# Mevcut uploads ve data klasörlerini silelim
+rm -rf uploads data
+
+# Yeni klasörleri oluşturup izinleri ayarlayalım
+mkdir -p uploads/projects uploads/icons data
+chmod -R 777 uploads data
+
+# Projenin tüm dosyalarının sahipliğini mevcut kullanıcıya verelim
+sudo chown -R $USER:$USER .
+
+# Projects.json dosyasını oluşturalım
+echo '{"projects":[]}' > data/projects.json
+chmod 666 data/projects.json
+```
+
 4. Start the server:
 ```bash
+npm run setup
 node server.js
 ```
 
