@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const config = require('./config');
 
-// Proje kök dizinini al
+// Get project root directory
 const rootDir = __dirname;
 
 const dirs = [
@@ -11,7 +12,7 @@ const dirs = [
     path.join(rootDir, 'uploads/projects')
 ];
 
-// Dizinleri oluştur
+// Create directories
 dirs.forEach(dir => {
     try {
         if (!fs.existsSync(dir)) {
@@ -23,7 +24,7 @@ dirs.forEach(dir => {
     }
 });
 
-// Projects dosyasını oluştur
+// Create projects file
 const projectsFile = path.join(rootDir, 'data', 'projects.json');
 if (!fs.existsSync(projectsFile)) {
     try {
@@ -35,4 +36,34 @@ if (!fs.existsSync(projectsFile)) {
     } catch (error) {
         console.error('Error creating projects.json:', error);
     }
-} 
+}
+
+// SSL config oluştur
+const sslConfig = `
+[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+x509_extensions = v3_req
+distinguished_name = dn
+
+[dn]
+C = TR
+ST = Istanbul
+L = Istanbul
+O = Mercury App Center
+OU = Development
+CN = *
+
+[v3_req]
+basicConstraints = CA:TRUE
+keyUsage = digitalSignature, keyEncipherment, keyCertSign
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName = @alt_names
+
+[alt_names]
+${config.ssl.domains.map((domain, index) => `DNS.${index + 1} = ${domain}`).join('\n')}
+${config.ssl.ips.map((ip, index) => `IP.${index + 1} = ${ip}`).join('\n')}
+`;
+
+fs.writeFileSync('ssl.conf', sslConfig); 

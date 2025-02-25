@@ -5,6 +5,7 @@ const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
 const session = require('express-session');
+const config = require('./config');
 
 const app = express();
 
@@ -21,7 +22,7 @@ app.use(session({
 }));
 
 const corsOptions = {
-    origin: 'http://localhost:3000',
+    origin: config.urls.base(),
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control'],
     credentials: true
@@ -37,7 +38,7 @@ app.use('/projects', express.static(path.join(__dirname, 'uploads/projects')));
 app.options('*', cors(corsOptions));
 
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.header('Access-Control-Allow-Origin', config.urls.base());
     res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
     res.header('Access-Control-Allow-Credentials', true);
@@ -436,7 +437,8 @@ app.get('/api/check-session', (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+// Get port from config
+app.listen(config.server.port, () => {
+    console.log(`Server running on ${config.urls.base()}`);
+    console.log(`Local IP address: ${config.server.host}`);
 });

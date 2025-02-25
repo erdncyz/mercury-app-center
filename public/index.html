@@ -115,6 +115,10 @@
     </div>
 
     <script>
+        const CONFIG = {
+            baseUrl: `http://${location.hostname}:${location.port || 3000}`
+        };
+
         let currentPage = 1;
         const itemsPerPage = 10;
         let allVersions = [];
@@ -122,7 +126,7 @@
 
         window.onload = async function() {
             try {
-                const sessionResponse = await fetch('http://localhost:3000/api/check-session', {
+                const sessionResponse = await fetch(`${CONFIG.baseUrl}/api/check-session`, {
                     method: 'GET',
                     credentials: 'include',
                     headers: {
@@ -150,7 +154,6 @@
                 }
             } catch (error) {
                 console.error('Session check error:', error);
-                // Hata durumunda login sayfasını göster
                 localStorage.removeItem('isLoggedIn');
                 localStorage.removeItem('username');
                 document.getElementById('loginContainer').style.display = 'block';
@@ -166,7 +169,7 @@
             const password = document.getElementById('password').value;
 
             try {
-                const response = await fetch('http://localhost:3000/login', {
+                const response = await fetch(`${CONFIG.baseUrl}/login`, {
                     method: 'POST',
                     credentials: 'include',
                     headers: {
@@ -230,7 +233,7 @@
 
         async function handleLogout() {
             try {
-                const response = await fetch('http://localhost:3000/logout', {
+                const response = await fetch(`${CONFIG.baseUrl}/logout`, {
                     method: 'POST',
                     credentials: 'include'
                 });
@@ -258,7 +261,7 @@
 
         async function checkLoginStatus() {
             try {
-                const response = await fetch('http://localhost:3000/api/check-session', {
+                const response = await fetch(`${CONFIG.baseUrl}/api/check-session`, {
                     credentials: 'include'
                 });
                 const data = await response.json();
@@ -293,7 +296,7 @@
             const projectName = document.getElementById('projectNameInput').value;
             
             try {
-                const response = await fetch('http://localhost:3000/api/projects', {
+                const response = await fetch(`${CONFIG.baseUrl}/api/projects`, {
                     method: 'POST',
                     credentials: 'include',
                     headers: {
@@ -318,7 +321,7 @@
 
         async function showAllApps(page = 1) {
             try {
-                const response = await fetch(`http://localhost:3000/api/projects?page=${page}&limit=10`, {
+                const response = await fetch(`${CONFIG.baseUrl}/api/projects?page=${page}&limit=10`, {
                     credentials: 'include'
                 });
                 const data = await response.json();
@@ -583,7 +586,7 @@
         async function deleteProject(projectId) {
             showConfirmDialog('Are you sure you want to delete this project?', async () => {
                 try {
-                    const response = await fetch(`http://localhost:3000/api/projects/${projectId}`, {
+                    const response = await fetch(`${CONFIG.baseUrl}/api/projects/${projectId}`, {
                         method: 'DELETE',
                         credentials: 'include'
                     });
@@ -671,7 +674,7 @@
             removeUploadError();
             
             try {
-                const response = await fetch('http://localhost:3000/api/upload', {
+                const response = await fetch(`${CONFIG.baseUrl}/api/upload`, {
                     method: 'POST',
                     credentials: 'include',
                     body: formData
@@ -774,7 +777,7 @@
 
         async function downloadVersion(projectId, versionId) {
             try {
-                const response = await fetch(`http://localhost:3000/api/download/${projectId}/${versionId}`, {
+                const response = await fetch(`${CONFIG.baseUrl}/api/download/${projectId}/${versionId}`, {
                     method: 'GET',
                     credentials: 'include'
                 });
@@ -839,7 +842,7 @@
         async function deleteVersion(projectId, versionId) {
             showConfirmDialog('Are you sure you want to delete this version?', async () => {
                 try {
-                    const response = await fetch(`http://localhost:3000/api/projects/${projectId}/versions/${versionId}`, {
+                    const response = await fetch(`${CONFIG.baseUrl}/api/projects/${projectId}/versions/${versionId}`, {
                         method: 'DELETE',
                         credentials: 'include',
                         headers: {
@@ -873,7 +876,7 @@
 
         async function showRecentUploads() {
             try {
-                const response = await fetch('http://localhost:3000/api/projects', {
+                const response = await fetch(`${CONFIG.baseUrl}/api/projects`, {
                     credentials: 'include'
                 });
                 const projects = await response.json();

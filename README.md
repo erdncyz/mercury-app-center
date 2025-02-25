@@ -63,6 +63,7 @@ cd mercury-app-center
 2. Install required dependencies:
 ```bash
 npm install
+npm install dotenv
 ```
 
 3. Create required directories:
@@ -96,6 +97,7 @@ chmod 666 data/projects.json
 ```bash
 npm run setup
 node server.js
+PORT=4000 HOST=192.168.1.107 node server.js
 ```
 
 ## Configuration
