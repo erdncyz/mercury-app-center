@@ -75,20 +75,20 @@ chmod 755 uploads
 if encounter any permission issues, run the following commands:
 
 ```bash
-# Önce projenin olduğu dizine gidelim
+# First, navigate to the project directory
 cd /Users/erdincyilmaz/Desktop/mercury-app-center
 
-# Mevcut uploads ve data klasörlerini silelim
+# Remove existing uploads and data directories
 rm -rf uploads data
 
-# Yeni klasörleri oluşturup izinleri ayarlayalım
+# Create new directories and set permissions
 mkdir -p uploads/projects uploads/icons data
 chmod -R 777 uploads data
 
-# Projenin tüm dosyalarının sahipliğini mevcut kullanıcıya verelim
+# Set ownership of all project files to current user
 sudo chown -R $USER:$USER .
 
-# Projects.json dosyasını oluşturalım
+# Create projects.json file
 echo '{"projects":[]}' > data/projects.json
 chmod 666 data/projects.json
 ```

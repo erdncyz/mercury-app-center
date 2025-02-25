@@ -38,7 +38,7 @@ if (!fs.existsSync(projectsFile)) {
     }
 }
 
-// SSL config oluştur
+// Create SSL configuration
 const sslConfig = `
 [req]
 default_bits = 2048

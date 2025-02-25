@@ -107,7 +107,7 @@ app.post('/api/projects', async (req, res) => {
             data.projects = [];
         }
 
-        // Proje dizinlerini oluştur
+        // Create project directories
         const projectDir = path.join(__dirname, 'uploads', 'projects', name);
         const iosDir = path.join(projectDir, 'ios');
         const androidDir = path.join(projectDir, 'android');
@@ -115,7 +115,7 @@ app.post('/api/projects', async (req, res) => {
         const androidtvDir = path.join(projectDir, 'androidtv');
 
         try {
-            // Tüm platform dizinlerini oluştur
+            // Create all platform directories
             if (!fs.existsSync(projectDir)) {
                 fs.mkdirSync(projectDir, { recursive: true, mode: 0o777 });
                 fs.mkdirSync(iosDir, { recursive: true, mode: 0o777 });
@@ -124,10 +124,10 @@ app.post('/api/projects', async (req, res) => {
                 fs.mkdirSync(androidtvDir, { recursive: true, mode: 0o777 });
             }
 
-            // Projeyi listeye ekle
+            // Add project to list
             data.projects.push(newProject);
 
-            // Projects.json dosyasını güncelle
+            // Update projects.json file
             fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2), { mode: 0o666 });
 
             res.status(201).json({ success: true, project: newProject });
