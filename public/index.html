@@ -492,7 +492,7 @@
                                                     <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
-                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                    <button ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
                                                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                                         </svg>
@@ -535,7 +535,7 @@
                                                     <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
-                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                    <button ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
                                                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                                         </svg>
@@ -578,7 +578,7 @@
                                                     <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
-                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                    <button ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
                                                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                                         </svg>
@@ -621,7 +621,7 @@
                                                     <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
-                                                    <button onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                    <button ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
                                                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                                         </svg>
@@ -835,32 +835,95 @@
 
         async function downloadVersion(projectId, versionId) {
             try {
-                const response = await fetch(`${CONFIG.baseUrl}/api/download/${projectId}/${versionId}`, {
-                    method: 'GET',
-                    credentials: 'include'
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to download file');
-                }
-
-                const blob = await response.blob();
+                // Get the button that was clicked
+                const clickedButton = event.target.closest('button');
                 
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download';
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
+                // Disable the button and show loading state
+                if (clickedButton) {
+                    // Store original button content
+                    const originalContent = clickedButton.innerHTML;
+                    
+                    // Update button appearance
+                    clickedButton.disabled = true;
+                    clickedButton.innerHTML = `
+                        <svg class="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 30" stroke-dashoffset="0"></circle>
+                            <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                    `;
+                    
+                    const response = await fetch(`${CONFIG.baseUrl}/api/download/${projectId}/${versionId}`, {
+                        method: 'GET',
+                        credentials: 'include'
+                    });
 
-                showNotification('Download started', 'success');
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to download file');
+                    }
+
+                    const blob = await response.blob();
+                    
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    showNotification('Download started', 'success');
+                    
+                    // Restore button state after download completes
+                    if (clickedButton) {
+                        setTimeout(() => {
+                            clickedButton.innerHTML = originalContent;
+                            clickedButton.disabled = false;
+                        }, 1000); // Short delay to ensure user sees the feedback
+                    }
+                } else {
+                    // Fallback if button not found
+                    const response = await fetch(`${CONFIG.baseUrl}/api/download/${projectId}/${versionId}`, {
+                        method: 'GET',
+                        credentials: 'include'
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to download file');
+                    }
+
+                    const blob = await response.blob();
+                    
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    showNotification('Download started', 'success');
+                }
             } catch (error) {
                 console.error('Download error:', error);
                 showNotification(error.message, 'error');
+                
+                // If error occurs, also restore the button
+                const clickedButton = event.target.closest('button');
+                if (clickedButton) {
+                    const defaultIcon = `<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    Download`;
+                    clickedButton.innerHTML = defaultIcon;
+                    clickedButton.disabled = false;
+                }
             }
         }
 
@@ -1445,6 +1508,11 @@
         });
 
         // ... existing code ...
+
+        // Add touch events handler for mobile
+        document.addEventListener('touchstart', function() {
+            // This empty handler enables :active CSS states on iOS
+        }, false);
     </script>
 </body>
 </html>

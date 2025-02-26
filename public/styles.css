@@ -502,16 +502,22 @@ main {
 }
 
 .version-actions button {
-    padding: 0.625rem 1rem;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
     border: none;
+    font-weight: 500;
+}
+
+.version-actions button:active {
+    transform: scale(0.96);
 }
 
 .version-actions button:first-child {
@@ -534,6 +540,36 @@ main {
     background-color: #dc2626;
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+/* Add spinner animation */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Improve mobile button styles */
+@media (max-width: 768px) {
+    .version-actions button {
+        width: 100%;
+        margin-bottom: 0.5rem;
+        min-height: 44px; /* Minimum touch target height */
+        font-size: 1rem; /* Larger text for better readability */
+        padding: 0.75rem 1rem;
+    }
+    
+    /* Add a slightly larger touch area */
+    .version-actions {
+        margin-top: 0.75rem;
+    }
 }
 
 /* Confirm Dialog Styles */
