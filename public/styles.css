@@ -361,13 +361,23 @@ main {
 
 .notification {
     position: fixed;
-    bottom: 2rem;
-    right: 2rem;
-    padding: 1rem 2rem;
-    border-radius: 0.5rem;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    border-radius: 8px;
     color: white;
-    animation: slideIn 0.3s ease;
-    z-index: 1000;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+    max-width: 90%;
+    text-align: center;
+}
+
+.notification.info {
+    background-color: #3b82f6;
 }
 
 .notification.success {
@@ -378,15 +388,12 @@ main {
     background-color: #ef4444;
 }
 
-@keyframes slideIn {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
+.notification.warning {
+    background-color: #f59e0b;
+}
+
+.notification-hide {
+    opacity: 0;
 }
 
 .modal {
@@ -487,7 +494,7 @@ main {
     background-size: 64px 64px;
 }
 
-/* Version actions için yeni stiller */
+/* New styles for version actions */
 .version-actions {
     display: flex;
     gap: 0.75rem;
@@ -848,7 +855,7 @@ main {
     }
 }
 
-/* Versiyon listesi için virtual scrolling */
+/* Virtual scrolling for version list */
 .version-list {
     height: 400px;
     overflow-y: auto;
@@ -973,11 +980,11 @@ main {
 
     /* Modals - improved for mobile */
     .modal-content {
-        width: 90%;
-        max-width: 100%;
-        padding: 1.25rem;
-        margin: 5vh auto;
+        width: 95%;
+        max-width: none;
         max-height: 90vh;
+        overflow-y: auto;
+        padding: 1rem;
     }
     
     /* Close button for modals on mobile */
@@ -1040,6 +1047,29 @@ main {
         margin: 0.25rem 0;
         min-height: 44px; /* Minimum touch target height */
     }
+
+    /* Notification Component */
+    .notification {
+        width: 95%;
+        left: 2.5%;
+        padding: 0.75rem;
+        font-size: 14px;
+    }
+
+    /* User list improvements for mobile */
+    #usersList {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    
+    .user-details {
+        font-size: 0.85rem;
+    }
+    
+    /* Admin panel button in header */
+    #adminPanelButton {
+        margin-right: 0.5rem;
+    }
 }
 
 /* Small mobile devices */
@@ -1095,4 +1125,193 @@ main {
         -webkit-appearance: none;
         border-radius: 0.75rem; /* Re-apply border radius on iOS */
     }
+}
+
+/* Auth Toggle */
+.auth-toggle {
+    display: flex;
+    margin-bottom: 1.5rem;
+    background-color: #f3f4f6;
+    border-radius: 0.75rem;
+    padding: 0.25rem;
+    width: 100%;
+}
+
+.auth-toggle-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    cursor: pointer;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.auth-toggle-btn.active {
+    background-color: var(--card-background);
+    color: var(--primary-color);
+    font-weight: 500;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Register Form */
+#registerForm input {
+    width: 100%;
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    font-size: 1rem;
+    box-sizing: border-box;
+    background-color: #f8fafc;
+}
+
+#registerForm button {
+    width: 100%;
+    padding: 1rem;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 0.75rem;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 0.5rem;
+}
+
+#registerForm button:hover {
+    background-color: var(--hover-color);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+}
+
+/* Admin Panel Styles */
+.user-item {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    background-color: white;
+}
+
+.user-info {
+    flex: 1;
+}
+
+.user-name {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.user-details {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    color: #555;
+    font-size: 14px;
+}
+
+.user-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.approve-btn, .revoke-btn, .admin-btn, .revoke-admin-btn {
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.approve-btn {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.approve-btn:hover {
+    background-color: #45a049;
+}
+
+.revoke-btn {
+    background-color: #f44336;
+    color: white;
+}
+
+.revoke-btn:hover {
+    background-color: #d32f2f;
+}
+
+.admin-btn {
+    background-color: #3f51b5;
+    color: white;
+}
+
+.admin-btn:hover {
+    background-color: #303f9f;
+}
+
+.revoke-admin-btn {
+    background-color: #ff9800;
+    color: white;
+}
+
+.revoke-admin-btn:hover {
+    background-color: #f57c00;
+}
+
+.users-section {
+    margin-bottom: 30px;
+}
+
+.users-section h3 {
+    margin-bottom: 15px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+/* Mobile Responsive Admin Panel */
+@media (max-width: 768px) {
+    .user-item {
+        flex-direction: column;
+    }
+    
+    .user-actions {
+        margin-left: 0;
+        margin-top: 1rem;
+        flex-direction: row;
+        width: 100%;
+    }
+    
+    .approve-btn, .revoke-btn {
+        flex: 1;
+        text-align: center;
+    }
+}
+
+.delete-btn {
+    background-color: #ef4444;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-left: 8px;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.3s;
+}
+
+.delete-btn:hover {
+    background-color: #dc2626;
 } 

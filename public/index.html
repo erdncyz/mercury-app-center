@@ -12,10 +12,21 @@
         <div class="login-box">
             <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'%3E%3Cpath d='M12 2c-4.4 0-8 3.6-8 8s3.6 8 8 8 8-3.6 8-8-3.6-8-8-8zm0 14c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6z'/%3E%3Ccircle cx='12' cy='8' r='2'/%3E%3Crect x='11' y='10' width='2' height='6'/%3E%3Crect x='11' y='16' width='2' height='2'/%3E%3C/svg%3E" alt="Mercury Icon" class="login-icon">
             <h2>Mercury App Center</h2>
+            <div class="auth-toggle">
+                <button class="auth-toggle-btn active" data-target="loginForm">Login</button>
+                <button class="auth-toggle-btn" data-target="registerForm">Register</button>
+            </div>
             <form id="loginForm" onsubmit="handleLogin(event)">
                 <input type="text" id="username" placeholder="Username" required>
                 <input type="password" id="password" placeholder="Password" required>
                 <button type="submit">Login</button>
+            </form>
+            <form id="registerForm" style="display: none;" onsubmit="handleRegister(event)">
+                <input type="text" id="registerUsername" placeholder="Username" required>
+                <input type="password" id="registerPassword" placeholder="Password" required>
+                <input type="email" id="registerEmail" placeholder="Email">
+                <input type="text" id="registerFullName" placeholder="Full Name">
+                <button type="submit">Register</button>
             </form>
         </div>
         <div class="background-icons"></div>
@@ -29,6 +40,7 @@
             </div>
             <div class="header-right">
                 <span id="userDisplay"></span>
+                <button id="adminPanelButton" style="display: none;" onclick="showAdminPanel()">Admin Panel</button>
                 <button onclick="handleLogout()">Logout</button>
             </div>
         </header>
@@ -113,6 +125,18 @@
                     </form>
                 </div>
             </div>
+
+            <div id="usersAdminModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-close" onclick="closeModal('usersAdminModal')"></div>
+                    <h2>User Management</h2>
+                    <p>Approve or reject pending user registrations</p>
+                    <div id="usersList"></div>
+                    <div class="modal-actions">
+                        <button type="button" class="cancel-btn" onclick="closeModal('usersAdminModal')">Close</button>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -155,44 +179,37 @@
             }
         }
 
-        window.onload = async function() {
-            try {
-                const sessionResponse = await fetch(`${CONFIG.baseUrl}/api/check-session`, {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    }
+        // When document is ready
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Set auth toggle event listeners
+            document.querySelectorAll('.auth-toggle-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const targetForm = this.dataset.target;
+                    
+                    // Hide all forms
+                    document.getElementById('loginForm').style.display = 'none';
+                    document.getElementById('registerForm').style.display = 'none';
+                    
+                    // Show selected form
+                    document.getElementById(targetForm).style.display = 'block';
+                    
+                    // Update active states
+                    document.querySelectorAll('.auth-toggle-btn').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    this.classList.add('active');
                 });
-                
-                const sessionData = await sessionResponse.json();
-                
-                if (sessionData.isLoggedIn) {
-                    // Session aktif ise
-                    localStorage.setItem('isLoggedIn', 'true');
-                    localStorage.setItem('username', sessionData.username);
-                    document.getElementById('loginContainer').style.display = 'none';
-                    document.getElementById('mainContainer').style.display = 'block';
-                    updateUsername();
-                    showAllApps();
-                    // Apply mobile enhancements
-                    enhanceTouchExperience();
-                } else {
-                    // Session aktif değilse
-                    localStorage.removeItem('isLoggedIn');
-                    localStorage.removeItem('username');
-                    document.getElementById('loginContainer').style.display = 'block';
-                    document.getElementById('mainContainer').style.display = 'none';
-                }
-            } catch (error) {
-                console.error('Session check error:', error);
-                localStorage.removeItem('isLoggedIn');
-                localStorage.removeItem('username');
-                document.getElementById('loginContainer').style.display = 'block';
-                document.getElementById('mainContainer').style.display = 'none';
+            });
+            
+            if (localStorage.getItem('isLoggedIn') === 'true') {
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('mainContainer').style.display = 'block';
+                updateUsername();
+                showAllApps();
             }
-        };
+            
+            await checkLoginStatus();
+        });
         
         // Update enhanceTouchExperience on resize
         window.addEventListener('resize', function() {
@@ -237,12 +254,15 @@
                 if (data.success) {
                     localStorage.setItem('isLoggedIn', 'true');
                     localStorage.setItem('username', data.user.username);
+                    localStorage.setItem('userRole', data.user.role);
                     document.getElementById('loginContainer').style.display = 'none';
                     document.getElementById('mainContainer').style.display = 'block';
                     updateUsername();
+                    await checkAdminStatus();
+                    await updateUserPermissions();
                     showAllApps();
                 } else {
-                    showLoginError('Invalid username or password');
+                    showLoginError(data.message || data.error || 'Invalid username or password');
                 }
             } catch (error) {
                 console.error('Login error:', error);
@@ -297,6 +317,7 @@
                 if (data.success) {
                     localStorage.removeItem('isLoggedIn');
                     localStorage.removeItem('username');
+                    localStorage.removeItem('userRole');
                     document.getElementById('loginContainer').style.display = 'block';
                     document.getElementById('mainContainer').style.display = 'none';
                     showNotification('Logged out successfully', 'success');
@@ -321,9 +342,19 @@
                 });
                 const data = await response.json();
                 
-                if (!data.isLoggedIn) {
+                if (data.isLoggedIn) {
+                    localStorage.setItem('isLoggedIn', 'true');
+                    localStorage.setItem('username', data.username);
+                    localStorage.setItem('userRole', data.userRole);
+                    document.getElementById('loginContainer').style.display = 'none';
+                    document.getElementById('mainContainer').style.display = 'block';
+                    updateUsername();
+                    await checkAdminStatus();
+                    await updateUserPermissions();
+                } else {
                     localStorage.removeItem('isLoggedIn');
                     localStorage.removeItem('username');
+                    localStorage.removeItem('userRole');
                     document.getElementById('loginContainer').style.display = 'block';
                     document.getElementById('mainContainer').style.display = 'none';
                 }
@@ -619,6 +650,9 @@
                     container.appendChild(card);
                 });
 
+                // Pagination controls eklendikten sonra, butonları güncelle
+                updateActionButtons();
+                
                 // Sayfalama kontrollerini ekle
                 if (data.totalPages > 1) {
                     const paginationDiv = document.createElement('div');
@@ -781,51 +815,20 @@
         }
 
         function showNotification(message, type = 'success') {
-            // Form elementini bulalım
-            const loginForm = document.getElementById('loginForm');
-            
-            // Varolan notification container'ı bulalım veya oluşturalım
-            let container = document.querySelector('.notification-container');
-            if (!container) {
-                container = document.createElement('div');
-                container.className = 'notification-container';
-                // Container'ı login butonundan önce ekleyelim
-                loginForm.insertBefore(container, loginForm.querySelector('button'));
-            }
-
-            // Önceki bildirimleri temizleyelim
-            container.innerHTML = '';
-
-            // Yeni bildirimi oluşturalım
+            // Create notification
             const notification = document.createElement('div');
             notification.className = `notification ${type}`;
-
-            const icon = document.createElement('div');
-            icon.className = 'notification-icon';
-            icon.innerHTML = type === 'success' 
-                ? `<svg fill="none" viewBox="0 0 24 24" stroke="#10b981">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                   </svg>`
-                : `<svg fill="none" viewBox="0 0 24 24" stroke="#ef4444">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                   </svg>`;
-
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'notification-message';
-            messageDiv.textContent = message;
-
-            notification.appendChild(icon);
-            notification.appendChild(messageDiv);
-            container.appendChild(notification);
-
-            // 3 saniye sonra bildirimi kaldıralım
+            notification.textContent = message;
+            notification.style.zIndex = '9999';
+            
+            // Add to body
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 3 seconds
             setTimeout(() => {
                 notification.style.opacity = '0';
                 setTimeout(() => {
                     notification.remove();
-                    if (container.children.length === 0) {
-                        container.remove();
-                    }
                 }, 300);
             }, 3000);
         }
@@ -879,7 +882,7 @@
         }
 
         function toggleVersion(event, element) {
-            event.stopPropagation(); // Projenin toggle'ını engellemek için
+            event.stopPropagation(); // Prevent project toggle
             
             const wasActive = element.classList.contains('active');
             
@@ -1052,11 +1055,11 @@
                 'test': '🧪 Test',
                 'regression': '🔄 Regression'
             };
-            // Eğer env değeri varsa ve labels içinde mevcutsa onu döndür, yoksa Unknown
+            // If env value exists and is in labels, return it, otherwise return Unknown
             return env && labels[env] ? labels[env] : '❓ Unknown';
         }
 
-        // Lazy loading için Intersection Observer ekleyelim
+        // Add Intersection Observer for lazy loading
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
@@ -1104,6 +1107,344 @@
                 }
             });
         }
+
+        // Handle user registration
+        async function handleRegister(event) {
+            event.preventDefault();
+            removeLoginError();
+            
+            const username = document.getElementById('registerUsername').value;
+            const password = document.getElementById('registerPassword').value;
+            const email = document.getElementById('registerEmail').value;
+            const fullName = document.getElementById('registerFullName').value;
+            
+            try {
+                const response = await fetch(`${CONFIG.baseUrl}/api/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password, email, fullName })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('Registration successful. Your account is pending approval by an administrator.', 'success');
+                    // Switch back to login form
+                    document.querySelector('.auth-toggle-btn[data-target="loginForm"]').click();
+                } else {
+                    showLoginError(data.error || 'Registration failed');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                showLoginError('Registration failed. Please try again.');
+            }
+        }
+        
+        // Check if user is admin
+        async function checkAdminStatus() {
+            try {
+                const response = await fetch(`${CONFIG.baseUrl}/api/check-admin`, {
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                if (data.isAdmin) {
+                    // Show admin panel button
+                    document.getElementById('adminPanelButton').style.display = 'inline-block';
+                } else {
+                    document.getElementById('adminPanelButton').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Admin check error:', error);
+            }
+        }
+        
+        // Show admin panel
+        function showAdminPanel() {
+            loadUsers();
+            document.getElementById('usersAdminModal').style.display = 'flex';
+        }
+        
+        // Load users for admin panel
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${CONFIG.baseUrl}/api/users`, {
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                const usersList = document.getElementById('usersList');
+                usersList.innerHTML = '';
+                
+                // Group users into pending and approved
+                const pendingUsers = data.users.filter(user => !user.approved);
+                const approvedUsers = data.users.filter(user => user.approved);
+                
+                // Show pending users first
+                if (pendingUsers.length > 0) {
+                    const pendingSection = document.createElement('div');
+                    pendingSection.className = 'users-section';
+                    pendingSection.innerHTML = '<h3>Pending Approval</h3>';
+                    
+                    pendingUsers.forEach(user => {
+                        const userItem = createUserItem(user);
+                        pendingSection.appendChild(userItem);
+                    });
+                    
+                    usersList.appendChild(pendingSection);
+                }
+                
+                // Then show approved users
+                if (approvedUsers.length > 0) {
+                    const approvedSection = document.createElement('div');
+                    approvedSection.className = 'users-section';
+                    approvedSection.innerHTML = '<h3>Approved Users</h3>';
+                    
+                    approvedUsers.forEach(user => {
+                        const userItem = createUserItem(user);
+                        approvedSection.appendChild(userItem);
+                    });
+                    
+                    usersList.appendChild(approvedSection);
+                }
+                
+                if (data.users.length === 0) {
+                    usersList.innerHTML = '<p class="empty-state">No users found</p>';
+                }
+            } catch (error) {
+                console.error('Load users error:', error);
+                document.getElementById('usersList').innerHTML = '<p class="error-message">Failed to load users</p>';
+            }
+        }
+        
+        // Create user item element for the admin panel
+        function createUserItem(user) {
+            const userItem = document.createElement('div');
+            userItem.className = 'user-item';
+            userItem.dataset.userId = user.id;
+            
+            // Create user info
+            const userInfo = document.createElement('div');
+            userInfo.className = 'user-info';
+            userInfo.innerHTML = `
+                <div class="user-name">${user.fullName || user.username}</div>
+                <div class="user-details">
+                    <div class="user-username">Username: ${user.username}</div>
+                    ${user.email ? `<div class="user-email">Email: ${user.email}</div>` : ''}
+                    <div class="user-role">Role: ${user.role}</div>
+                    <div class="user-status">Status: ${user.approved ? 'Approved' : 'Pending'}</div>
+                    <div class="user-created">Registered: ${new Date(user.created).toLocaleDateString()}</div>
+                </div>
+            `;
+            
+            userItem.appendChild(userInfo);
+            
+            // Create action buttons (don't show for admin user)
+            if (user.username !== 'admin') {
+                const userActions = document.createElement('div');
+                userActions.className = 'user-actions';
+                
+                if (!user.approved) {
+                    const approveBtn = document.createElement('button');
+                    approveBtn.className = 'approve-btn';
+                    approveBtn.textContent = 'Approve';
+                    approveBtn.onclick = () => updateUserApproval(user.id, true);
+                    userActions.appendChild(approveBtn);
+                    
+                    const rejectBtn = document.createElement('button');
+                    rejectBtn.className = 'revoke-btn';
+                    rejectBtn.textContent = 'Reject';
+                    rejectBtn.onclick = () => updateUserApproval(user.id, false);
+                    userActions.appendChild(rejectBtn);
+                } else {
+                    const revokeBtn = document.createElement('button');
+                    revokeBtn.className = 'revoke-btn';
+                    revokeBtn.textContent = 'Revoke Access';
+                    revokeBtn.onclick = () => updateUserApproval(user.id, false);
+                    userActions.appendChild(revokeBtn);
+                    
+                    // Add "Make Admin" button for non-admin users who are approved
+                    if (user.role !== 'admin') {
+                        const makeAdminBtn = document.createElement('button');
+                        makeAdminBtn.className = 'admin-btn';
+                        makeAdminBtn.textContent = 'Make Admin';
+                        makeAdminBtn.onclick = () => updateUserRole(user.id, 'admin');
+                        userActions.appendChild(makeAdminBtn);
+                    } else {
+                        // For admin users, add a "Revoke Admin" button
+                        const revokeAdminBtn = document.createElement('button');
+                        revokeAdminBtn.className = 'revoke-admin-btn';
+                        revokeAdminBtn.textContent = 'Revoke Admin';
+                        revokeAdminBtn.onclick = () => updateUserRole(user.id, 'user');
+                        userActions.appendChild(revokeAdminBtn);
+                    }
+                }
+                
+                // Add delete button for all non-admin users
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.textContent = 'Delete User';
+                deleteBtn.onclick = () => deleteUser(user.id, user.username);
+                userActions.appendChild(deleteBtn);
+                
+                userItem.appendChild(userActions);
+            }
+            
+            return userItem;
+        }
+        
+        // Update user approval status
+        async function updateUserApproval(userId, approved) {
+            try {
+                const response = await fetch(`${CONFIG.baseUrl}/api/users/${userId}/approval`, {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ approved })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification(`User ${approved ? 'approved' : 'access revoked'} successfully`, 'success');
+                    loadUsers(); // Reload user list
+                } else {
+                    showNotification(data.error || `Failed to ${approved ? 'approve' : 'revoke'} user`, 'error');
+                }
+            } catch (error) {
+                console.error('Update user approval error:', error);
+                showNotification(`Failed to ${approved ? 'approve' : 'revoke'} user`, 'error');
+            }
+        }
+        
+        // Update user role
+        async function updateUserRole(userId, role) {
+            try {
+                const response = await fetch(`${CONFIG.baseUrl}/api/users/${userId}/role`, {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ role })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification(`User role updated to ${role} successfully`, 'success');
+                    loadUsers(); // Reload user list
+                } else {
+                    showNotification(data.error || `Failed to update user role`, 'error');
+                }
+            } catch (error) {
+                console.error('Update user role error:', error);
+                showNotification(`Failed to update user role`, 'error');
+            }
+        }
+
+        // Delete user
+        async function deleteUser(userId, username) {
+            showConfirmDialog(`Are you sure you want to delete user "${username}"?`, async () => {
+                try {
+                    const response = await fetch(`${CONFIG.baseUrl}/api/users/${userId}`, {
+                        method: 'DELETE',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showNotification('User deleted successfully', 'success');
+                        loadUsers(); // Reload user list
+                    } else {
+                        showNotification(data.error || 'Failed to delete user', 'error');
+                    }
+                } catch (error) {
+                    console.error('Delete user error:', error);
+                    showNotification('Failed to delete user', 'error');
+                }
+            }, 'user');
+        }
+
+        // Function to update UI elements based on user permissions
+        async function updateUserPermissions() {
+            try {
+                const response = await fetch(`${CONFIG.baseUrl}/api/check-admin`, {
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                const isAdmin = data.isAdmin;
+                localStorage.setItem('userRole', isAdmin ? 'admin' : 'user');
+                
+                // Proje oluşturma butonunu göster/gizle
+                const createProjectButton = document.querySelector('.create-project');
+                if (createProjectButton) {
+                    createProjectButton.style.display = isAdmin ? 'block' : 'none';
+                }
+                
+                // Tüm sayfalardaki silme ve yükleme butonlarını güncelleyelim
+                // Bu fonksiyon showAllApps içindeki app-card oluşturulduğunda çalışacak
+                updateActionButtons();
+            } catch (error) {
+                console.error('Failed to update user permissions:', error);
+            }
+        }
+        
+        // Function to update delete and upload buttons
+        function updateActionButtons() {
+            const isAdmin = localStorage.getItem('userRole') === 'admin';
+            
+            // Uygulama kart eylemlerini güncelle
+            document.querySelectorAll('.app-actions').forEach(actionContainer => {
+                const uploadBtn = actionContainer.querySelector('button:first-child');
+                const deleteBtn = actionContainer.querySelector('button:last-child');
+                
+                if (uploadBtn) uploadBtn.style.display = isAdmin ? 'flex' : 'none';
+                if (deleteBtn) deleteBtn.style.display = isAdmin ? 'flex' : 'none';
+            });
+            
+            // Tüm version-actions içindeki silme butonlarını güncelle
+            document.querySelectorAll('.version-actions').forEach(versionActions => {
+                const downloadBtn = versionActions.querySelector('button:first-child');
+                const deleteBtn = versionActions.querySelector('button:last-child');
+                
+                // İndirme butonunu herkes görebilir
+                if (downloadBtn) downloadBtn.style.display = 'flex';
+                
+                // Silme butonunu sadece adminler görebilir
+                if (deleteBtn) deleteBtn.style.display = isAdmin ? 'flex' : 'none';
+            });
+        }
+
+        // Add Intersection Observer for lazy loading
+        function setupLazyLoading() {
+            // ... existing code ...
+        }
+
+        // This function will be called when app-cards are created in showAllApps
+        updateActionButtons();
+
+        // ... existing code ...
+
+        // Update all delete buttons inside version-actions
+        document.querySelectorAll('.version-actions').forEach(versionActions => {
+            // ... existing code ...
+        });
+
+        // ... existing code ...
     </script>
 </body>
 </html>

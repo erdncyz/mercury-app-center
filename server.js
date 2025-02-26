@@ -75,6 +75,10 @@ app.post('/api/projects', async (req, res) => {
         if (!req.session.username) {
             return res.status(401).json({ success: false, error: 'User not authenticated' });
         }
+        
+        if (req.session.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Only admin users can create projects' });
+        }
 
         const { name } = req.body;
         if (!name) {
@@ -149,6 +153,14 @@ app.post('/api/projects', async (req, res) => {
 
 app.delete('/api/projects/:projectId', async (req, res) => {
     try {
+        if (!req.session.username) {
+            return res.status(401).json({ success: false, error: 'User not authenticated' });
+        }
+        
+        if (req.session.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Only admin users can delete projects' });
+        }
+        
         const { projectId } = req.params;
         const projectsFile = './data/projects.json';
         let data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
@@ -184,6 +196,14 @@ app.post('/api/upload', (req, res) => {
         }
 
         try {
+            if (!req.session.username) {
+                return res.status(401).json({ success: false, error: 'User not authenticated' });
+            }
+            
+            if (req.session.role !== 'admin') {
+                return res.status(403).json({ success: false, error: 'Only admin users can upload files' });
+            }
+            
             const { projectId, platform, version, notes, environment } = req.body;
             
             if (!projectId || !platform || !version || !environment) {
@@ -290,6 +310,7 @@ app.get('/api/projects', async (req, res) => {
         // En son yüklenenler en üstte olacak şekilde sırala
         projects.sort((a, b) => new Date(b.created) - new Date(a.created));
         
+        // Sort with most recent uploads at the top
         const paginatedProjects = projects.slice(startIndex, startIndex + limit);
         const totalPages = Math.ceil(projects.length / limit);
 
@@ -344,13 +365,17 @@ app.get('/api/download/:projectId/:versionId', (req, res) => {
 
 app.delete('/api/projects/:projectId/versions/:versionId', async (req, res) => {
     try {
-        const { projectId, versionId } = req.params;
-        const projectsFile = path.join(__dirname, 'data', 'projects.json');
-        
         if (!req.session.username) {
             return res.status(401).json({ success: false, error: 'User not authenticated' });
         }
+        
+        if (req.session.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Only admin users can delete versions' });
+        }
 
+        const { projectId, versionId } = req.params;
+        const projectsFile = path.join(__dirname, 'data', 'projects.json');
+        
         let data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
         const project = data.projects.find(p => p.id === projectId);
         
@@ -390,9 +415,38 @@ app.delete('/api/projects/:projectId/versions/:versionId', async (req, res) => {
 
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
-    if (username === 'admin' && password === 'admin') {
-        req.session.username = username;
+    
+    try {
+        // Read users from file
+        const usersFile = path.join(__dirname, 'data', 'users.json');
+        if (!fs.existsSync(usersFile)) {
+            return res.status(500).json({ success: false, message: 'User database not found' });
+        }
+        
+        const userData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        const user = userData.users.find(u => u.username === username && u.password === password);
+        
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid username or password'
+            });
+        }
+        
+        // Check if user is approved
+        if (!user.approved) {
+            return res.status(403).json({
+                success: false,
+                message: 'Your account is pending approval by an administrator'
+            });
+        }
+        
+        // Set session data
+        req.session.username = user.username;
+        req.session.userId = user.id;
+        req.session.role = user.role;
         req.session.isAuthenticated = true;
+        
         req.session.save((err) => {
             if (err) {
                 console.error('Session save error:', err);
@@ -401,15 +455,228 @@ app.post('/login', async (req, res) => {
             res.json({
                 success: true,
                 user: {
-                    username: username,
-                    displayName: username
+                    username: user.username,
+                    displayName: user.username,
+                    role: user.role
                 }
             });
         });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ success: false, message: 'Login failed' });
+    }
+});
+
+// Register new user
+app.post('/api/register', async (req, res) => {
+    try {
+        const { username, password, email, fullName } = req.body;
+        
+        // Validate input
+        if (!username || !password) {
+            return res.status(400).json({ success: false, error: 'Username and password are required' });
+        }
+        
+        // Read current users
+        const usersFile = path.join(__dirname, 'data', 'users.json');
+        let userData = { users: [] };
+        
+        if (fs.existsSync(usersFile)) {
+            userData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        }
+        
+        // Check if user already exists
+        if (userData.users.some(u => u.username === username)) {
+            return res.status(400).json({ success: false, error: 'Username already exists' });
+        }
+        
+        // Create new user object
+        const newUser = {
+            id: Date.now().toString(),
+            username,
+            password,
+            email: email || '',
+            fullName: fullName || '',
+            role: 'user',
+            approved: false,
+            created: new Date().toISOString()
+        };
+        
+        // Add user to array
+        userData.users.push(newUser);
+        
+        // Save to file
+        fs.writeFileSync(usersFile, JSON.stringify(userData, null, 2));
+        
+        res.status(201).json({ 
+            success: true, 
+            message: 'Registration successful. Your account is pending approval by an administrator.' 
+        });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ success: false, error: 'Registration failed' });
+    }
+});
+
+// Admin-only API: Get all users
+app.get('/api/users', async (req, res) => {
+    try {
+        // Check if user is admin
+        if (!req.session.username || req.session.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        // Read users file
+        const usersFile = path.join(__dirname, 'data', 'users.json');
+        if (!fs.existsSync(usersFile)) {
+            return res.status(200).json({ users: [] });
+        }
+        
+        const userData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        
+        // Remove passwords before sending
+        const safeUsers = userData.users.map(({ password, ...user }) => user);
+        
+        res.json({ users: safeUsers });
+    } catch (error) {
+        console.error('Get users error:', error);
+        res.status(500).json({ success: false, error: 'Failed to get users' });
+    }
+});
+
+// Admin-only API: Approve or reject user
+app.put('/api/users/:userId/approval', async (req, res) => {
+    try {
+        // Check if user is admin
+        if (!req.session.username || req.session.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        const { userId } = req.params;
+        const { approved } = req.body;
+        
+        if (approved === undefined) {
+            return res.status(400).json({ success: false, error: 'Approval status required' });
+        }
+        
+        // Read users file
+        const usersFile = path.join(__dirname, 'data', 'users.json');
+        const userData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        
+        // Find user
+        const userIndex = userData.users.findIndex(u => u.id === userId);
+        if (userIndex === -1) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        
+        // Update approval status
+        userData.users[userIndex].approved = approved;
+        
+        // Save to file
+        fs.writeFileSync(usersFile, JSON.stringify(userData, null, 2));
+        
+        res.json({ 
+            success: true, 
+            message: `User ${approved ? 'approved' : 'rejected'} successfully` 
+        });
+    } catch (error) {
+        console.error('User approval error:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user approval status' });
+    }
+});
+
+// Admin-only API: Change user role to admin
+app.put('/api/users/:userId/role', async (req, res) => {
+    try {
+        // Check if user is admin
+        if (!req.session.username || req.session.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        const { userId } = req.params;
+        const { role } = req.body;
+        
+        if (!role || !['admin', 'user'].includes(role)) {
+            return res.status(400).json({ success: false, error: 'Valid role required (admin or user)' });
+        }
+        
+        // Read users file
+        const usersFile = path.join(__dirname, 'data', 'users.json');
+        const userData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        
+        // Find user
+        const userIndex = userData.users.findIndex(u => u.id === userId);
+        if (userIndex === -1) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        
+        // Update role
+        userData.users[userIndex].role = role;
+        
+        // Save to file
+        fs.writeFileSync(usersFile, JSON.stringify(userData, null, 2));
+        
+        res.json({ 
+            success: true, 
+            message: `User role updated to ${role} successfully` 
+        });
+    } catch (error) {
+        console.error('User role update error:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user role' });
+    }
+});
+
+// Admin-only API: Delete user
+app.delete('/api/users/:userId', async (req, res) => {
+    try {
+        // Check if user is admin
+        if (!req.session.username || req.session.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        const { userId } = req.params;
+        
+        // Read users file
+        const usersFile = path.join(__dirname, 'data', 'users.json');
+        const userData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        
+        // Find user
+        const userIndex = userData.users.findIndex(u => u.id === userId);
+        if (userIndex === -1) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        
+        // Check if trying to delete admin user (username: "admin")
+        if (userData.users[userIndex].username === 'admin') {
+            return res.status(403).json({ success: false, error: 'Cannot delete the primary admin account' });
+        }
+        
+        // Remove user
+        userData.users.splice(userIndex, 1);
+        
+        // Save to file
+        fs.writeFileSync(usersFile, JSON.stringify(userData, null, 2));
+        
+        res.json({ 
+            success: true, 
+            message: 'User deleted successfully' 
+        });
+    } catch (error) {
+        console.error('User deletion error:', error);
+        res.status(500).json({ success: false, error: 'Failed to delete user' });
+    }
+});
+
+// Check admin status
+app.get('/api/check-admin', (req, res) => {
+    if (req.session && req.session.username && req.session.role === 'admin') {
+        res.json({
+            isAdmin: true,
+            username: req.session.username
+        });
     } else {
-        res.status(401).json({
-            success: false,
-            message: 'Invalid username or password'
+        res.json({
+            isAdmin: false
         });
     }
 });
@@ -428,7 +695,8 @@ app.get('/api/check-session', (req, res) => {
     if (req.session && req.session.username) {
         res.json({
             isLoggedIn: true,
-            username: req.session.username
+            username: req.session.username,
+            userRole: req.session.role
         });
     } else {
         res.json({

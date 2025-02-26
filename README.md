@@ -8,8 +8,9 @@ A centralized platform for managing and distributing mobile applications across 
 - Environment-based versioning (Production, Test, Regression)
 - Secure file upload and download
 - Version history tracking
-- User authentication
+- User authentication and role management
 - Real-time updates
+- Role-based access control
 
 <img width="1255" alt="image" src="https://github.com/user-attachments/assets/802ff463-679f-47b0-b311-f8e8398a3743" />
 
@@ -24,9 +25,16 @@ A centralized platform for managing and distributing mobile applications across 
 ## Features
 
 - **Authentication**
-  - Simple admin authentication
+  - User registration with admin approval
+  - User role management (admin/user roles)
   - Session management
   - Secure file access control
+
+- **User Management**
+  - Admin approval for new users
+  - Admin role assignment/revocation
+  - User deletion functionality
+  - Role-based access control
 
 - **Project Management**
   - Create and manage multiple projects
@@ -51,6 +59,11 @@ A centralized platform for managing and distributing mobile applications across 
   - Automatic file organization
   - Version-based file naming
   - Test notes for each version
+
+- **Role-Based Access Control**
+  - Admin users: Full access to create, upload, delete, and manage users
+  - Regular users: Download-only access
+  - Restricted access to admin panels based on user role
 
 ## Installation
 
@@ -91,13 +104,15 @@ sudo chown -R $USER:$USER .
 # Create projects.json file
 echo '{"projects":[]}' > data/projects.json
 chmod 666 data/projects.json
+
+# Create users.json file with admin user
+echo '{"users":[{"id":"1","username":"admin","password":"admin","email":"admin@example.com","role":"admin","approved":true,"created":"2023-01-01T00:00:00.000Z"}]}' > data/users.json
+chmod 666 data/users.json
 ```
 
 4. Start the server:
 ```bash
-npm run setup
 node server.js
-PORT=4000 HOST=192.168.1.107 node server.js
 ```
 
 ## Configuration
@@ -112,22 +127,28 @@ Server Configuration:
 1. Access the application at `http://localhost:3000`
 
 2. Authentication:
-   - Username: admin
-   - Password: admin
+   - Default admin: username: admin, password: admin
+   - User registration with admin approval
+   - Role-based access (admin vs regular users)
    - Session-based authentication
-   - Automatic session management
 
-3. Project Management:
-   - Create new projects
-   - Upload application versions
-   - Manage existing projects
-   - Delete projects or versions
+3. User Management (Admin Only):
+   - Approve/reject new user registrations
+   - Grant/revoke admin privileges
+   - Delete users (except primary admin)
+   - View all users and their status
 
-4. Version Control:
-   - Upload new versions
+4. Project Management:
+   - Create new projects (admin only)
+   - Upload application versions (admin only)
+   - Download application versions (all users)
+   - Delete projects or versions (admin only)
+
+5. Version Control:
+   - Upload new versions (admin only)
    - Add version notes
    - Track version history
-   - Download specific versions
+   - Download specific versions (all users)
 
 ## Directory Structure
 
@@ -139,7 +160,8 @@ mercury-app-center/
 │   ├── icons/            # Project icons
 │   └── projects/         # Application files
 ├── data/                  # Data storage
-│   └── projects.json     # Project metadata
+│   ├── projects.json     # Project metadata
+│   └── users.json        # User accounts
 ├── server.js             # Server implementation
 ├── package.json          # Project dependencies
 └── README.md            # Documentation
@@ -168,7 +190,7 @@ mercury-app-center/
 
 ## Security
 
-- Simple admin authentication
+- Role-based authentication and authorization
 - Session-based access control
 - Secure file upload/download
 - Input validation and sanitization
@@ -199,5 +221,5 @@ For support, please create an issue in the repository.
 ## Notes
 
 - Ensure proper file permissions for the uploads directory
-- Regular backup of projects.json is recommended
+- Regular backup of projects.json and users.json is recommended
 - Monitor disk space for uploads directory
