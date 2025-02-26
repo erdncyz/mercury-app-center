@@ -397,17 +397,23 @@ main {
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.5);
-    justify-content: center;
-    align-items: center;
     z-index: 1000;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling for iOS */
 }
 
 .modal-content {
     background-color: var(--card-background);
+    margin: 10vh auto;
     padding: 2rem;
     border-radius: 1rem;
-    width: 100%;
-    max-width: 500px;
+    width: 80%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    position: relative;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling for iOS */
 }
 
 .modal-content h2 {
@@ -851,4 +857,242 @@ main {
 
 .version-item {
     contain: content;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    /* General layout adjustments */
+    body {
+        font-size: 14px;
+    }
+    
+    main {
+        padding: 1rem;
+    }
+
+    /* Login screen */
+    .login-box {
+        padding: 2rem 1.5rem;
+        max-width: 100%;
+        width: 90%;
+    }
+
+    /* Improve login form for mobile */
+    #loginForm input {
+        padding: 0.875rem;
+        margin-bottom: 1rem;
+        font-size: 16px; /* Prevents iOS zoom on focus */
+    }
+    
+    #loginForm button {
+        padding: 0.875rem;
+        font-size: 16px;
+    }
+
+    /* Header adjustments */
+    header {
+        padding: 0.75rem 1rem;
+        flex-direction: column;
+    }
+
+    .header-left {
+        margin-bottom: 0.5rem;
+    }
+
+    .header-left h1 {
+        font-size: 1.25rem;
+    }
+
+    .header-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    /* Search bar */
+    .search-bar {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .search-bar input,
+    .search-bar select {
+        width: 100%;
+        font-size: 16px; /* Prevents iOS zoom on focus */
+        padding: 0.75rem;
+    }
+
+    /* App cards */
+    .app-card {
+        padding: 1rem;
+    }
+
+    .app-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .app-title {
+        margin-bottom: 0.5rem;
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    /* Add larger touch targets for mobile */
+    .app-card, 
+    .platform-item, 
+    .version-item {
+        min-height: 44px; /* Minimum touch target height */
+    }
+
+    .platform-item {
+        padding: 0.75rem;
+    }
+
+    .version-item {
+        padding: 0.75rem;
+    }
+
+    .version-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+
+    /* Version actions */
+    .version-actions {
+        margin-top: 0.5rem;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .version-actions button {
+        width: 100%;
+        margin-bottom: 0.5rem;
+        min-height: 44px; /* Minimum touch target height */
+    }
+
+    /* Modals - improved for mobile */
+    .modal-content {
+        width: 90%;
+        max-width: 100%;
+        padding: 1.25rem;
+        margin: 5vh auto;
+        max-height: 90vh;
+    }
+    
+    /* Close button for modals on mobile */
+    .modal-close {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        width: 32px;
+        height: 32px;
+        background: rgba(0,0,0,0.05);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+    
+    .modal-close:before, .modal-close:after {
+        content: '';
+        position: absolute;
+        width: 16px;
+        height: 2px;
+        background: var(--text-color);
+        transform: rotate(45deg);
+    }
+    
+    .modal-close:after {
+        transform: rotate(-45deg);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 0.75rem;
+        font-size: 16px; /* Prevents iOS zoom on focus */
+    }
+
+    .modal-actions {
+        flex-direction: column;
+    }
+
+    .modal-actions button {
+        width: 100%;
+        margin: 0.25rem 0;
+        min-height: 44px; /* Minimum touch target height */
+    }
+
+    /* Confirm dialog */
+    .confirm-dialog {
+        width: 90%;
+        padding: 1rem;
+    }
+
+    .confirm-dialog-actions {
+        flex-direction: column;
+    }
+
+    .confirm-dialog-actions button {
+        width: 100%;
+        margin: 0.25rem 0;
+        min-height: 44px; /* Minimum touch target height */
+    }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+    /* App actions */
+    .app-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .app-actions button {
+        width: 100%;
+        margin-bottom: 0.5rem;
+        min-height: 44px; /* Minimum touch target height */
+    }
+
+    /* Version details */
+    .version-environment {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .version-notes {
+        word-break: break-word;
+    }
+
+    /* Notifications */
+    .notification {
+        width: 95%;
+        left: 2.5%;
+        padding: 0.75rem;
+        font-size: 14px;
+    }
+
+    /* File inputs improved for mobile */
+    input[type="file"] {
+        width: 100%;
+        padding: 0.5rem 0;
+    }
+    
+    /* Additional spacing for buttons */
+    .create-project button {
+        width: 100%;
+        padding: 0.75rem;
+        min-height: 44px;
+    }
+}
+
+/* Fix for iOS specifics */
+@supports (-webkit-touch-callout: none) {
+    /* iOS specific styles */
+    input, select, textarea, button {
+        -webkit-appearance: none;
+        border-radius: 0.75rem; /* Re-apply border radius on iOS */
+    }
 } 

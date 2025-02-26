@@ -53,6 +53,7 @@
 
             <div id="createProjectModal" class="modal">
                 <div class="modal-content">
+                    <div class="modal-close" onclick="closeModal('createProjectModal')"></div>
                     <h2>Create New Project</h2>
                     <form id="createProjectForm">
                         <div class="form-group">
@@ -69,6 +70,7 @@
 
             <div id="uploadModal" class="modal">
                 <div class="modal-content">
+                    <div class="modal-close" onclick="closeModal('uploadModal')"></div>
                     <div class="upload-modal-header">
                         <h2>Upload New Version</h2>
                         <div class="project-name" id="uploadProjectName"></div>
@@ -123,6 +125,35 @@
         const itemsPerPage = 10;
         let allVersions = [];
         let filteredVersions = [];
+        
+        // Enhance touch interactions for mobile
+        function enhanceTouchExperience() {
+            const isMobile = window.matchMedia('(max-width: 768px)').matches;
+            
+            if (isMobile) {
+                // Add touch delay to prevent accidental taps
+                document.querySelectorAll('button, .app-card, .version-item').forEach(element => {
+                    element.addEventListener('touchstart', function() {
+                        this.classList.add('touch-active');
+                    });
+                    
+                    element.addEventListener('touchend', function() {
+                        this.classList.remove('touch-active');
+                    });
+                    
+                    element.addEventListener('touchcancel', function() {
+                        this.classList.remove('touch-active');
+                    });
+                });
+                
+                // Add better scrolling for modals on mobile
+                document.querySelectorAll('.modal-content').forEach(modal => {
+                    modal.addEventListener('touchmove', function(e) {
+                        e.stopPropagation();
+                    });
+                });
+            }
+        }
 
         window.onload = async function() {
             try {
@@ -145,6 +176,8 @@
                     document.getElementById('mainContainer').style.display = 'block';
                     updateUsername();
                     showAllApps();
+                    // Apply mobile enhancements
+                    enhanceTouchExperience();
                 } else {
                     // Session aktif değilse
                     localStorage.removeItem('isLoggedIn');
@@ -160,6 +193,28 @@
                 document.getElementById('mainContainer').style.display = 'none';
             }
         };
+        
+        // Update enhanceTouchExperience on resize
+        window.addEventListener('resize', function() {
+            enhanceTouchExperience();
+        });
+        
+        // Prevent zooming on double-tap for iOS Safari
+        document.addEventListener('touchstart', function(event) {
+            if (event.touches.length > 1) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+        
+        // Code to initialize touch active style
+        document.head.insertAdjacentHTML('beforeend', `
+            <style>
+                .touch-active {
+                    opacity: 0.7;
+                    transition: opacity 0.2s;
+                }
+            </style>
+        `);
 
         async function handleLogin(event) {
             event.preventDefault();
