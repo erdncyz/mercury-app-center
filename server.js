@@ -46,6 +46,14 @@ app.use((req, res, next) => {
     next();
 });
 
+// Authentication middleware
+const isAuthenticated = (req, res, next) => {
+    if (!req.session.username) {
+        return res.status(401).json({ success: false, error: 'User not authenticated' });
+    }
+    next();
+};
+
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const uploadPath = './uploads/temp';
@@ -187,7 +195,8 @@ app.delete('/api/projects/:projectId', async (req, res) => {
 
 app.post('/api/upload', (req, res) => {
     upload(req, res, function(err) {
-        if (err) {
+        // File upload validation errors should be bypassed for URL-only platforms
+        if (err && !(req.body.platform === 'ios' || req.body.platform === 'tvos')) {
             console.error('Upload error:', err);
             return res.status(400).json({
                 success: false,
@@ -204,12 +213,28 @@ app.post('/api/upload', (req, res) => {
                 return res.status(403).json({ success: false, error: 'Only admin users can upload files' });
             }
             
-            const { projectId, platform, version, notes, environment } = req.body;
+            const { projectId, platform, version, notes, environment, url } = req.body;
             
             if (!projectId || !platform || !version || !environment) {
                 return res.status(400).json({ 
                     success: false, 
                     error: 'Missing required fields' 
+                });
+            }
+
+            // Check that URL is provided for iOS/tvOS platforms
+            if ((platform === 'ios' || platform === 'tvos') && !url) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Public test URL is required for iOS and Apple TV platforms'
+                });
+            }
+
+            // Check that file is provided for other platforms
+            if (platform !== 'ios' && platform !== 'tvos' && !req.file) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'App file is required for this platform'
                 });
             }
 
@@ -224,7 +249,7 @@ app.post('/api/upload', (req, res) => {
                 });
             }
 
-            // Versiyon kontrolü - aynı versiyon ve platform varsa hata ver
+            // Version check - show error if same version and platform already exists
             const existingVersion = project.versions?.find(v => 
                 v.version === version && v.platform === platform.toLowerCase()
             );
@@ -236,30 +261,54 @@ app.post('/api/upload', (req, res) => {
                 });
             }
 
-            // Yeni versiyon için devam et
-            const fileName = `${version}-${req.file.originalname}`;
-            const projectDir = path.join(__dirname, 'uploads', 'projects', project.name);
-            const platformDir = path.join(projectDir, platform.toLowerCase());
-            
-            // Dizinleri oluştur
-            fs.mkdirSync(projectDir, { recursive: true });
-            fs.mkdirSync(platformDir, { recursive: true });
+            let newVersion;
 
-            // Dosyayı kopyala
-            const filePath = path.join(platformDir, fileName);
-            fs.copyFileSync(req.file.path, filePath);
-            fs.unlinkSync(req.file.path); // Geçici dosyayı sil
+            // Handle URL uploads for iOS and tvOS platforms
+            if (platform === 'ios' || platform === 'tvos') {
+                if (!url) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Public test URL is required for iOS and Apple TV platforms'
+                    });
+                }
+                
+                newVersion = {
+                    id: Date.now().toString(),
+                    platform: platform.toLowerCase(),
+                    version: version || 'URL Only',
+                    environment: environment || 'production',
+                    notes: notes || '',
+                    url: url,
+                    uploadedBy: req.session.username,
+                    uploadedAt: new Date().toISOString()
+                };
+            } 
+            // Handle file uploads for other platforms
+            else {
+                const fileName = `${version}-${req.file.originalname}`;
+                const projectDir = path.join(__dirname, 'uploads', 'projects', project.name);
+                const platformDir = path.join(projectDir, platform.toLowerCase());
+                
+                // Create directories
+                fs.mkdirSync(projectDir, { recursive: true });
+                fs.mkdirSync(platformDir, { recursive: true });
 
-            const newVersion = {
-                id: Date.now().toString(),
-                platform: platform.toLowerCase(),
-                version,
-                environment,
-                notes,
-                file: fileName,
-                uploadedBy: req.session.username,
-                uploadedAt: new Date().toISOString()
-            };
+                // Copy the file
+                const filePath = path.join(platformDir, fileName);
+                fs.copyFileSync(req.file.path, filePath);
+                fs.unlinkSync(req.file.path); // Delete temporary file
+
+                newVersion = {
+                    id: Date.now().toString(),
+                    platform: platform.toLowerCase(),
+                    version,
+                    environment,
+                    notes,
+                    file: fileName,
+                    uploadedBy: req.session.username,
+                    uploadedAt: new Date().toISOString()
+                };
+            }
 
             if (!Array.isArray(project.versions)) {
                 project.versions = [];
@@ -276,7 +325,7 @@ app.post('/api/upload', (req, res) => {
             });
 
         } catch (error) {
-            // Hata durumunda geçici dosyayı temizle
+            // In case of error, clean up the temporary file
             if (req.file && req.file.path) {
                 fs.unlinkSync(req.file.path);
             }
@@ -307,7 +356,7 @@ app.get('/api/projects', async (req, res) => {
         const data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
         const projects = data.projects || [];
         
-        // En son yüklenenler en üstte olacak şekilde sırala
+        // Sort with most recent uploads at the top
         projects.sort((a, b) => new Date(b.created) - new Date(a.created));
         
         // Sort with most recent uploads at the top
@@ -346,6 +395,12 @@ app.get('/api/download/:projectId/:versionId', (req, res) => {
             return res.status(404).json({ error: 'Version not found' });
         }
 
+        // For iOS and Apple TV platforms with URL, redirect to the test URL
+        if ((version.platform === 'ios' || version.platform === 'tvos') && version.url) {
+            return res.redirect(version.url);
+        }
+
+        // For file-based platforms, serve the file
         const filePath = path.join(__dirname, 'uploads', 'projects', project.name, version.platform, version.file);
         
         if (!fs.existsSync(filePath)) {
@@ -391,7 +446,7 @@ app.delete('/api/projects/:projectId/versions/:versionId', async (req, res) => {
         const version = project.versions[versionIndex];
         const filePath = path.join(__dirname, 'uploads', 'projects', project.name, version.platform, version.file);
         
-        // Sadece dosyayı sil, klasörü değil
+        // Only delete the file, not the folder
         if (fs.existsSync(filePath)) {
             try {
                 fs.unlinkSync(filePath);
@@ -400,10 +455,10 @@ app.delete('/api/projects/:projectId/versions/:versionId', async (req, res) => {
             }
         }
         
-        // Versiyonu projeden kaldır
+        // Remove version from the project
         project.versions.splice(versionIndex, 1);
         
-        // Projeyi güncelle
+        // Update the project
         fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
         
         res.status(200).json({ success: true, message: 'Version deleted successfully' });
@@ -701,6 +756,97 @@ app.get('/api/check-session', (req, res) => {
     } else {
         res.json({
             isLoggedIn: false
+        });
+    }
+});
+
+// Version update endpoint
+app.put('/api/projects/:projectId/versions/:versionId', isAuthenticated, async (req, res) => {
+    try {
+        if (req.session.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Admin access required' });
+        }
+
+        const { projectId, versionId } = req.params;
+        const { version, environment, notes, url, platform } = req.body;
+
+        const projectsFile = './data/projects.json';
+        if (!fs.existsSync(projectsFile)) {
+            return res.status(404).json({ success: false, error: 'Projects file not found' });
+        }
+
+        const data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+        const projectIndex = data.projects.findIndex(p => p.id === projectId);
+        
+        if (projectIndex === -1) {
+            return res.status(404).json({ success: false, error: 'Project not found' });
+        }
+
+        const project = data.projects[projectIndex];
+        const versionIndex = project.versions.findIndex(v => v.id === versionId);
+        
+        if (versionIndex === -1) {
+            return res.status(404).json({ success: false, error: 'Version not found' });
+        }
+
+        // Update the version fields
+        const versionToUpdate = project.versions[versionIndex];
+        
+        versionToUpdate.version = version;
+        versionToUpdate.environment = environment;
+        versionToUpdate.notes = notes;
+        versionToUpdate.url = url;
+        versionToUpdate.platform = platform;
+        versionToUpdate.updatedAt = new Date().toISOString();
+        
+        // Write the updated data back to the file
+        fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
+        
+        res.json({ 
+            success: true, 
+            version: versionToUpdate
+        });
+    } catch (error) {
+        console.error('Version update error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to update version: ' + error.message 
+        });
+    }
+});
+
+// GET a specific version
+app.get('/api/projects/:projectId/versions/:versionId', isAuthenticated, async (req, res) => {
+    try {
+        const { projectId, versionId } = req.params;
+
+        const projectsFile = './data/projects.json';
+        if (!fs.existsSync(projectsFile)) {
+            return res.status(404).json({ success: false, error: 'Projects file not found' });
+        }
+
+        const data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+        const project = data.projects.find(p => p.id === projectId);
+        
+        if (!project) {
+            return res.status(404).json({ success: false, error: 'Project not found' });
+        }
+
+        const version = project.versions.find(v => v.id === versionId);
+        
+        if (!version) {
+            return res.status(404).json({ success: false, error: 'Version not found' });
+        }
+
+        res.json({ 
+            success: true, 
+            version
+        });
+    } catch (error) {
+        console.error('Get version error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to get version: ' + error.message 
         });
     }
 });

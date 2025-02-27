@@ -309,9 +309,63 @@ main {
 }
 
 .version-notes {
-    font-size: 0.875rem;
-    color: var(--text-color);
-    margin-bottom: 1rem;
+    margin-top: 10px;
+    white-space: pre-wrap;
+    color: #666;
+    font-size: 14px;
+}
+
+.version-url {
+    margin-top: 10px;
+    font-size: 14px;
+    word-break: break-all;
+}
+
+.version-url a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+.version-url a:hover {
+    text-decoration: underline;
+}
+
+/* URL Badge Styles */
+.url-badge {
+    background-color: #0ea5e9;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    display: inline-flex;
+    align-items: center;
+}
+
+.url-badge::before {
+    content: "🔗";
+    margin-right: 4px;
+}
+
+/* URL Explanation Styles */
+.url-explanation {
+    background-color: #f0f9ff;
+    border-left: 4px solid #0ea5e9;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin: 10px 0 20px 0;
+}
+
+.url-explanation p {
+    margin: 8px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #334155;
+}
+
+.url-explanation p:first-child {
+    font-weight: 500;
 }
 
 .empty-state {
@@ -1350,4 +1404,115 @@ main {
 
 .delete-btn:hover {
     background-color: #dc2626;
+}
+
+/* TestFlight talimatları için stiller */
+.testflight-instructions {
+    background-color: #f1f5f9;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 10px 0;
+    border-left: 4px solid #3b82f6;
+    font-size: 0.9rem;
+}
+
+.testflight-instructions h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #334155;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.testflight-instructions ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.testflight-instructions li {
+    margin-bottom: 6px;
+    color: #475569;
+}
+
+.testflight-instructions a {
+    color: #3b82f6;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.testflight-instructions a:hover {
+    text-decoration: underline;
+}
+
+/* Modern butonlar için stiller */
+.modern-buttons-container {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.modern-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.modern-button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.download-button {
+    background-color: #3b82f6;
+}
+
+.download-button:hover {
+    background-color: #2563eb;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+}
+
+.edit-button {
+    background-color: #10b981;
+}
+
+.edit-button:hover {
+    background-color: #059669;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
+.delete-button {
+    background-color: #ef4444;
+}
+
+.delete-button:hover {
+    background-color: #dc2626;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+}
+
+/* Mobil uyumluluk için */
+@media (max-width: 768px) {
+    .modern-buttons-container {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .modern-button {
+        width: 100%;
+        padding: 10px 16px;
+        justify-content: center;
+    }
 } 

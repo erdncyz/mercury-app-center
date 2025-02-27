@@ -43,8 +43,8 @@ A centralized platform for managing and distributing mobile applications across 
   - Project icons support
 
 - **Platform Support**
-  - iOS application management (.ipa, .app)
-  - Android application management (.apk)
+  - iOS, Apple TV application management with TestFlight integration
+  - Android, Android TV application management (.apk)
   - Multi-platform version tracking
 
 - **User Interface**
@@ -53,6 +53,7 @@ A centralized platform for managing and distributing mobile applications across 
   - Search and filter capabilities
   - Recent uploads tracking
   - Version history
+  - Platform-specific button controls
 
 - **File Management**
   - Secure file upload/download
@@ -61,9 +62,10 @@ A centralized platform for managing and distributing mobile applications across 
   - Test notes for each version
 
 - **Role-Based Access Control**
-  - Admin users: Full access to create, upload, delete, and manage users
+  - Admin users: Full access to create, edit, upload, delete, and manage users
   - Regular users: Download-only access
   - Restricted access to admin panels based on user role
+  - Platform-specific controls (Edit, Download, Delete buttons)
 
 ## Installation
 
@@ -85,11 +87,11 @@ mkdir -p uploads/icons uploads/projects data
 chmod 755 uploads
 ```
 
-if encounter any permission issues, run the following commands:
+If you encounter any permission issues, run the following commands:
 
 ```bash
 # First, navigate to the project directory
-cd /Users/erdincyilmaz/Desktop/mercury-app-center
+cd /path/to/mercury-app-center
 
 # Remove existing uploads and data directories
 rm -rf uploads data
@@ -142,20 +144,28 @@ Server Configuration:
    - Create new projects (admin only)
    - Upload application versions (admin only)
    - Download application versions (all users)
+   - Edit version information (admin only)
    - Delete projects or versions (admin only)
 
 5. Version Control:
    - Upload new versions (admin only)
+   - Edit version details (admin only)
    - Add version notes
    - Track version history
    - Download specific versions (all users)
+
+6. Platform-Specific Features:
+   - iOS and Apple TV: TestFlight integration with instructions
+   - Android and Android TV: Direct APK downloads
+   - Platform-specific button visibility (Edit button only for admin users)
 
 ## Directory Structure
 
 ```bash
 mercury-app-center/
 ├── public/                 # Static files
-│   └── index.html         # Main application
+│   ├── index.html         # Main application
+│   └── styles.css         # Application styles
 ├── uploads/               # Upload directory
 │   ├── icons/            # Project icons
 │   └── projects/         # Application files
@@ -163,6 +173,8 @@ mercury-app-center/
 │   ├── projects.json     # Project metadata
 │   └── users.json        # User accounts
 ├── server.js             # Server implementation
+├── config.js             # Configuration settings
+├── setup.js              # Setup utilities
 ├── package.json          # Project dependencies
 └── README.md            # Documentation
 ```
@@ -170,11 +182,14 @@ mercury-app-center/
 ## Supported File Types
 
 - **iOS Applications**
-  - `.ipa` (iOS App Store Package)
-  - `.app` (iOS Application Bundle)
+  - TestFlight URLs
 
 - **Android Applications**
   - `.apk` (Android Package)
+
+- **TV Applications**
+  - Apple TV: TestFlight URLs
+  - Android TV: APK files
 
 ## Requirements
 
@@ -194,6 +209,7 @@ mercury-app-center/
 - Session-based access control
 - Secure file upload/download
 - Input validation and sanitization
+- Admin-only access for critical operations
 
 ## Development
 
@@ -223,3 +239,4 @@ For support, please create an issue in the repository.
 - Ensure proper file permissions for the uploads directory
 - Regular backup of projects.json and users.json is recommended
 - Monitor disk space for uploads directory
+- Admin users have exclusive access to Edit, Delete, and Upload functions

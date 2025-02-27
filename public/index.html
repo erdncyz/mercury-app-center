@@ -89,34 +89,52 @@
                     </div>
                     <form id="uploadForm">
                         <input type="hidden" id="projectIdInput" name="projectId">
-                        <div class="form-group">
+                        <div class="form-group" id="platformSelectGroup">
                             <label>Platform</label>
                             <select id="platformSelect" name="platform" required>
+                                <option value="">Please select a platform</option>
                                 <option value="ios">iOS</option>
                                 <option value="android">Android</option>
                                 <option value="tvos">Apple TV</option>
                                 <option value="androidtv">Android TV</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label>Version</label>
-                            <input type="text" id="versionInput" name="version" required placeholder="1.0.0">
+                        
+                        <!-- Standard fields (hidden for iOS/tvOS) -->
+                        <div id="standardFieldsGroup">
+                            <div class="form-group">
+                                <label>Version</label>
+                                <input type="text" id="versionInput" name="version" required placeholder="1.0.0">
+                            </div>
+                            <div class="form-group">
+                                <label>Test Notes</label>
+                                <textarea id="testNotes" name="notes" rows="4"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Environment</label>
+                                <select id="environmentSelect" name="environment" required>
+                                    <option value="production">Production (Market)</option>
+                                    <option value="test">Test</option>
+                                    <option value="regression">Regression</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Test Notes</label>
-                            <textarea id="testNotes" name="notes" rows="4"></textarea>
+                        
+                        <!-- URL only fields (shown for iOS/tvOS) -->
+                        <div id="urlOnlyFieldsGroup" style="display:none;">
+                            <div class="url-explanation">
+                                <p>For iOS and Apple TV platforms, please enter a direct TestFlight, AppStore or a test distribution service link.</p>
+                                <p>You can use a public test link from TestFlight, AppStore Connect, or third-party distribution services (Firebase App Distribution, AppCenter, etc.).</p>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Environment</label>
-                            <select id="environmentSelect" name="environment" required>
-                                <option value="production">Production (Market)</option>
-                                <option value="test">Test</option>
-                                <option value="regression">Regression</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
+                        
+                        <div class="form-group" id="appFileGroup">
                             <label>App File</label>
-                            <input type="file" id="appFile" name="file" required>
+                            <input type="file" id="appFile" name="file">
+                        </div>
+                        <div class="form-group" id="appUrlGroup" style="display:none;">
+                            <label>Public Test URL</label>
+                            <input type="url" id="appUrl" name="url" placeholder="https://test-flight.example.com/your-app">
                         </div>
                         <div class="modal-actions">
                             <button type="button" class="cancel-btn" onclick="closeModal('uploadModal')">Cancel</button>
@@ -200,6 +218,9 @@
                     this.classList.add('active');
                 });
             });
+            
+            // Platform seçimini dinle
+            document.getElementById('platformSelect').addEventListener('change', toggleFileOrUrlInput);
             
             if (localStorage.getItem('isLoggedIn') === 'true') {
                 document.getElementById('loginContainer').style.display = 'none';
@@ -423,13 +444,13 @@
                     card.className = 'app-card';
                     card.setAttribute('onclick', 'toggleProject(event, this)');
                     
-                    // Versiyonları unique hale getir
+                    // Make versions unique
                     const uniqueVersions = project.versions ? project.versions.reduce((acc, current) => {
                         const x = acc.find(item => item.version === current.version && item.platform === current.platform);
                         if (!x) {
                             return acc.concat([current]);
                         } else {
-                            // Eğer aynı versiyon varsa, daha yeni olanı kullan
+                            // If the same version exists, use the newer one
                             if (new Date(current.uploadedAt) > new Date(x.uploadedAt)) {
                                 const index = acc.indexOf(x);
                                 acc[index] = current;
@@ -438,7 +459,7 @@
                         }
                     }, []) : [];
 
-                    // Versiyonları tarihe göre sırala (en yeni en üstte)
+                    // Sort versions by date (newest first)
                     uniqueVersions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
                     const platforms = {
@@ -452,11 +473,11 @@
                         <div class="app-header">
                             <div class="app-title">${project.name}</div>
                             <div class="app-actions">
-                                <button onclick="event.stopPropagation(); showUploadModal('${project.id}', '${project.name}')">
+                                <button onclick="event.stopPropagation(); openUploadModal('${project.id}', '${project.name}')">
                                     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                                     </svg>
-                                    Upload .ipa/.apk/.app
+                                    Upload New Version
                                 </button>
                                 <button onclick="event.stopPropagation(); deleteProject('${project.id}')">
                                     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -476,8 +497,7 @@
                                         <div class="version-item" onclick="toggleVersion(event, this)">
                                             <div class="version-header">
                                                 <div class="version-title">
-                                                    <span class="version-number">v${version.version || 'N/A'}</span>
-                                                    <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    ${version.url ? `<span class="url-badge">URL</span>` : `<span class="version-number">v${version.version || 'N/A'}</span>`}
                                                     <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
                                                 </div>
                                                 <div class="version-toggle">▼</div>
@@ -485,25 +505,39 @@
                                             <div class="version-content">
                                                 <div class="version-info">
                                                     <div class="version-uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
-                                                    <div class="version-environment-info">
-                                                        <span class="environment-label">Environment:</span>
-                                                        <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
-                                                    </div>
-                                                    <div class="version-notes">${version.notes || 'No notes'}</div>
+                                                    ${version.url ? 
+                                                      `<div class="version-url">Test URL: <a href="${version.url}" target="_blank">${version.url}</a></div>
+                                                       
+                                                       <div class="testflight-instructions">
+                                                         <h4>📱 How to Test Using TestFlight:</h4>
+                                                         <ol>
+                                                           <li>Download the <a href="https://apps.apple.com/us/app/testflight/id899247664" target="_blank">TestFlight app</a> from the App Store</li>
+                                                           <li>Open the URL above in the TestFlight app</li>
+                                                           <li>Install the app and start testing</li>
+                                                         </ol>
+                                                       </div>` : 
+                                                      `<div class="version-environment-info">
+                                                         <span class="environment-label">Environment:</span>
+                                                         <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                       </div>
+                                                       <div class="version-notes">${version.notes || 'No notes'}</div>`
+                                                    }
                                                 </div>
                                                 <div class="version-actions">
-                                                    <button ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
-                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                                                        </svg>
-                                                        Download
-                                                    </button>
-                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
-                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                                        </svg>
-                                                        Delete
-                                                    </button>
+                                                    <div class="modern-buttons-container">
+                                                        <button class="modern-button edit-button" onclick="event.stopPropagation(); editVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                                            </svg>
+                                                            Edit
+                                                        </button>
+                                                        <button class="modern-button delete-button" onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                            </svg>
+                                                            Delete
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -535,18 +569,20 @@
                                                     <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
-                                                    <button ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
-                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                                                        </svg>
-                                                        Download
-                                                    </button>
-                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
-                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                                        </svg>
-                                                        Delete
-                                                    </button>
+                                                    <div class="modern-buttons-container">
+                                                        <button class="modern-button download-button" ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                                            </svg>
+                                                            Download
+                                                        </button>
+                                                        <button class="modern-button delete-button" onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                            </svg>
+                                                            Delete
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -562,8 +598,7 @@
                                         <div class="version-item" onclick="toggleVersion(event, this)">
                                             <div class="version-header">
                                                 <div class="version-title">
-                                                    <span class="version-number">v${version.version || 'N/A'}</span>
-                                                    <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    ${version.url ? `<span class="url-badge">URL</span>` : `<span class="version-number">v${version.version || 'N/A'}</span>`}
                                                     <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
                                                 </div>
                                                 <div class="version-toggle">▼</div>
@@ -571,25 +606,39 @@
                                             <div class="version-content">
                                                 <div class="version-info">
                                                     <div class="version-uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
-                                                    <div class="version-environment-info">
-                                                        <span class="environment-label">Environment:</span>
-                                                        <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
-                                                    </div>
-                                                    <div class="version-notes">${version.notes || 'No notes'}</div>
+                                                    ${version.url ? 
+                                                      `<div class="version-url">Test URL: <a href="${version.url}" target="_blank">${version.url}</a></div>
+                                                       
+                                                       <div class="testflight-instructions">
+                                                         <h4>📱 TestFlight Üzerinden Test Etmek İçin:</h4>
+                                                         <ol>
+                                                           <li>App Store'dan <a href="https://apps.apple.com/us/app/testflight/id899247664" target="_blank">TestFlight uygulamasını</a> yükleyin</li>
+                                                           <li>Yukarıdaki URL'yi TestFlight uygulamasında açın</li>
+                                                           <li>Uygulamayı yükleyin ve test edin</li>
+                                                         </ol>
+                                                       </div>` : 
+                                                      `<div class="version-environment-info">
+                                                         <span class="environment-label">Environment:</span>
+                                                         <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                       </div>
+                                                       <div class="version-notes">${version.notes || 'No notes'}</div>`
+                                                    }
                                                 </div>
                                                 <div class="version-actions">
-                                                    <button ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
-                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                                                        </svg>
-                                                        Download
-                                                    </button>
-                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
-                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                                        </svg>
-                                                        Delete
-                                                    </button>
+                                                    <div class="modern-buttons-container">
+                                                        <button class="modern-button edit-button" onclick="event.stopPropagation(); editVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                                            </svg>
+                                                            Edit
+                                                        </button>
+                                                        <button class="modern-button delete-button" onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                            </svg>
+                                                            Delete
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -621,18 +670,20 @@
                                                     <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
-                                                    <button ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
-                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                                                        </svg>
-                                                        Download
-                                                    </button>
-                                                    <button onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
-                                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                                        </svg>
-                                                        Delete
-                                                    </button>
+                                                    <div class="modern-buttons-container">
+                                                        <button class="modern-button download-button" ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                                            </svg>
+                                                            Download
+                                                        </button>
+                                                        <button class="modern-button delete-button" onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                            </svg>
+                                                            Delete
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -739,23 +790,38 @@
             if (dialog) dialog.remove();
         }
 
-        function showUploadModal(projectId, projectName) {
-            const modal = document.getElementById('uploadModal');
-            document.getElementById('projectIdInput').value = projectId;
-            document.getElementById('uploadProjectName').textContent = `Project: ${projectName}`;
-            modal.style.display = 'flex';
-            document.getElementById('uploadForm').reset();
-        }
-
         async function handleUpload(event) {
             event.preventDefault();
             
             const form = event.target;
             const formData = new FormData(form);
             
-            // Environment değerini formData'ya ekleyelim
-            const environment = document.getElementById('environmentSelect').value;
-            formData.set('environment', environment);
+            const platform = document.getElementById('platformSelect').value;
+            
+            // iOS ve Apple TV platformları için sadece URL
+            if (platform === 'ios' || platform === 'tvos') {
+                const url = document.getElementById('appUrl').value;
+                if (!url) {
+                    showUploadError('Public Test URL is required for iOS and Apple TV platforms');
+                    return;
+                }
+                
+                // URL tabanlı upload için diğer alanlar için varsayılan değerler kullan
+                formData.set('url', url);
+                formData.set('version', 'URL Only');
+                formData.set('environment', 'production');
+                formData.set('notes', '');
+                
+                // Dosya kaldır
+                formData.delete('file');
+            } else {
+                // Diğer platformlar için dosya kontrolü yap
+                const file = document.getElementById('appFile').files[0];
+                if (!file) {
+                    showUploadError('App file is required for this platform');
+                    return;
+                }
+            }
             
             const projectId = document.getElementById('projectIdInput').value;
             
@@ -1141,7 +1207,7 @@
             }
         }
 
-        // Versiyon yükleme fonksiyonunu güncelleyelim
+        // Let's update the version loading function
         function loadVersionsForProject(project, container) {
             const platforms = {
                 ios: project.versions?.filter(v => v.platform === 'ios').slice(0, 5) || [],
@@ -1150,7 +1216,7 @@
                 androidtv: project.versions?.filter(v => v.platform === 'androidtv').slice(0, 5) || []
             };
 
-            // Her platform için sadece son 5 versiyonu göster
+            // Show only the last 5 versions for each platform
             Object.entries(platforms).forEach(([platform, versions]) => {
                 if (versions.length) {
                     const platformDiv = document.createElement('div');
@@ -1215,8 +1281,18 @@
                 if (data.isAdmin) {
                     // Show admin panel button
                     document.getElementById('adminPanelButton').style.display = 'inline-block';
+                    
+                    // Show edit buttons for admin users
+                    document.querySelectorAll('.edit-button').forEach(button => {
+                        button.style.display = 'inline-flex';
+                    });
                 } else {
                     document.getElementById('adminPanelButton').style.display = 'none';
+                    
+                    // Hide edit buttons for non-admin users
+                    document.querySelectorAll('.edit-button').forEach(button => {
+                        button.style.display = 'none';
+                    });
                 }
             } catch (error) {
                 console.error('Admin check error:', error);
@@ -1441,7 +1517,7 @@
             }, 'user');
         }
 
-        // Function to update UI elements based on user permissions
+        // Update user permissions based on UI elements
         async function updateUserPermissions() {
             try {
                 const response = await fetch(`${CONFIG.baseUrl}/api/check-admin`, {
@@ -1452,14 +1528,14 @@
                 const isAdmin = data.isAdmin;
                 localStorage.setItem('userRole', isAdmin ? 'admin' : 'user');
                 
-                // Proje oluşturma butonunu göster/gizle
+                // Show/hide project creation button
                 const createProjectButton = document.querySelector('.create-project');
                 if (createProjectButton) {
                     createProjectButton.style.display = isAdmin ? 'block' : 'none';
                 }
                 
-                // Tüm sayfalardaki silme ve yükleme butonlarını güncelleyelim
-                // Bu fonksiyon showAllApps içindeki app-card oluşturulduğunda çalışacak
+                // Update all delete and upload buttons on all pages
+                // This function will run when app-cards are created in showAllApps
                 updateActionButtons();
             } catch (error) {
                 console.error('Failed to update user permissions:', error);
@@ -1470,7 +1546,7 @@
         function updateActionButtons() {
             const isAdmin = localStorage.getItem('userRole') === 'admin';
             
-            // Uygulama kart eylemlerini güncelle
+            // Update app card actions
             document.querySelectorAll('.app-actions').forEach(actionContainer => {
                 const uploadBtn = actionContainer.querySelector('button:first-child');
                 const deleteBtn = actionContainer.querySelector('button:last-child');
@@ -1479,15 +1555,19 @@
                 if (deleteBtn) deleteBtn.style.display = isAdmin ? 'flex' : 'none';
             });
             
-            // Tüm version-actions içindeki silme butonlarını güncelle
+            // Update all delete buttons inside version-actions
             document.querySelectorAll('.version-actions').forEach(versionActions => {
-                const downloadBtn = versionActions.querySelector('button:first-child');
-                const deleteBtn = versionActions.querySelector('button:last-child');
+                const downloadBtn = versionActions.querySelector('.download-button');
+                const editBtn = versionActions.querySelector('.edit-button');
+                const deleteBtn = versionActions.querySelector('.delete-button');
                 
-                // İndirme butonunu herkes görebilir
+                // Everyone can see the download button
                 if (downloadBtn) downloadBtn.style.display = 'flex';
                 
-                // Silme butonunu sadece adminler görebilir
+                // Only admins can see the edit button
+                if (editBtn) editBtn.style.display = isAdmin ? 'flex' : 'none';
+                
+                // Only admins can see the delete button
                 if (deleteBtn) deleteBtn.style.display = isAdmin ? 'flex' : 'none';
             });
         }
@@ -1497,22 +1577,222 @@
             // ... existing code ...
         }
 
-        // This function will be called when app-cards are created in showAllApps
-        updateActionButtons();
-
-        // ... existing code ...
-
-        // Update all delete buttons inside version-actions
-        document.querySelectorAll('.version-actions').forEach(versionActions => {
-            // ... existing code ...
+        // First get the current version
+        fetch(`${CONFIG.baseUrl}/api/projects/${projectId}/versions/${versionId}`, {
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.version) {
+                const version = data.version;
+                
+                // Open edit modal
+                const modal = document.getElementById('editVersionModal') || createEditVersionModal();
+                
+                // Fill form fields
+                document.getElementById('editVersionId').value = version.id;
+                document.getElementById('editProjectId').value = projectId;
+                document.getElementById('editVersionNumber').value = version.version || '';
+                document.getElementById('editEnvironment').value = version.environment || 'production';
+                document.getElementById('editNotes').value = version.notes || '';
+                document.getElementById('editUrl').value = version.url || '';
+                document.getElementById('editPlatform').value = version.platform || '';
+                
+                // Show modal
+                modal.style.display = 'flex';
+            } else {
+                showNotification('Version information could not be retrieved', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Version edit error:', error);
+            showNotification('Version editing error', 'error');
         });
 
-        // ... existing code ...
+        // Create edit version modal if not exists
+        function createEditVersionModal() {
+            const modal = document.createElement('div');
+            modal.id = 'editVersionModal';
+            modal.className = 'modal';
+            
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h2>Edit Version</h2>
+                    <form id="editVersionForm">
+                        <input type="hidden" id="editVersionId">
+                        <input type="hidden" id="editProjectId">
+                        <input type="hidden" id="editPlatform">
+                        
+                        <div class="form-group">
+                            <label for="editVersionNumber">Version</label>
+                            <input type="text" id="editVersionNumber" name="version" placeholder="1.0.0">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="editEnvironment">Environment</label>
+                            <select id="editEnvironment" name="environment">
+                                <option value="production">Production (Market)</option>
+                                <option value="test">Test</option>
+                                <option value="regression">Regression</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="editNotes">Test Notes</label>
+                            <textarea id="editNotes" name="notes" rows="4"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="editUrl">URL</label>
+                            <input type="url" id="editUrl" name="url" placeholder="https://">
+                        </div>
+                        
+                        <div class="modal-actions">
+                            <button type="button" class="cancel-btn" onclick="closeModal('editVersionModal')">Cancel</button>
+                            <button type="submit" class="create-btn">Update</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Add submit handler
+            document.getElementById('editVersionForm').addEventListener('submit', handleEditVersionSubmit);
+            
+            return modal;
+        }
+
+        // Handle edit version submit
+        async function handleEditVersionSubmit(event) {
+            event.preventDefault();
+            
+            const versionId = document.getElementById('editVersionId').value;
+            const projectId = document.getElementById('editProjectId').value;
+            const version = document.getElementById('editVersionNumber').value;
+            const environment = document.getElementById('editEnvironment').value;
+            const notes = document.getElementById('editNotes').value;
+            const url = document.getElementById('editUrl').value;
+            const platform = document.getElementById('editPlatform').value;
+            
+            try {
+                const response = await fetch(`${CONFIG.baseUrl}/api/projects/${projectId}/versions/${versionId}`, {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        version,
+                        environment,
+                        notes,
+                        url,
+                        platform
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Version updated successfully', 'success');
+                    closeModal('editVersionModal');
+                    await showAllApps();
+                    await showRecentUploads();
+                } else {
+                    showNotification('Version editing error', 'error');
+                }
+            } catch (error) {
+                console.error('Version update error:', error);
+                showNotification('Version editing error', 'error');
+            }
+        }
+
+        // This function will be called when app-cards are created in showAllApps
+        updateActionButtons();
 
         // Add touch events handler for mobile
         document.addEventListener('touchstart', function() {
             // This empty handler enables :active CSS states on iOS
         }, false);
+
+        function toggleFileOrUrlInput() {
+            const platform = document.getElementById('platformSelect').value;
+            const fileGroup = document.getElementById('appFileGroup');
+            const urlGroup = document.getElementById('appUrlGroup');
+            const fileInput = document.getElementById('appFile');
+            const urlInput = document.getElementById('appUrl');
+            const standardFields = document.getElementById('standardFieldsGroup');
+            const urlOnlyFields = document.getElementById('urlOnlyFieldsGroup');
+            
+            // If no platform is selected, hide all form fields
+            if (!platform) {
+                fileGroup.style.display = 'none';
+                urlGroup.style.display = 'none';
+                standardFields.style.display = 'none';
+                urlOnlyFields.style.display = 'none';
+                return;
+            }
+            
+            if (platform === 'ios' || platform === 'tvos') {
+                fileGroup.style.display = 'none';
+                urlGroup.style.display = 'block';
+                standardFields.style.display = 'none';
+                urlOnlyFields.style.display = 'block';
+                fileInput.removeAttribute('required');
+                urlInput.setAttribute('required', 'required');
+                
+                // Remove required attribute from the standard fields
+                document.getElementById('versionInput').removeAttribute('required');
+                document.getElementById('environmentSelect').removeAttribute('required');
+            } else {
+                fileGroup.style.display = 'block';
+                urlGroup.style.display = 'none';
+                standardFields.style.display = 'block';
+                urlOnlyFields.style.display = 'none';
+                fileInput.setAttribute('required', 'required');
+                urlInput.removeAttribute('required');
+                
+                // Restore required attribute to the standard fields
+                document.getElementById('versionInput').setAttribute('required', 'required');
+                document.getElementById('environmentSelect').setAttribute('required', 'required');
+            }
+        }
+
+        // Hide form fields
+        function hideAllUploadFields() {
+            document.getElementById('standardFieldsGroup').style.display = 'none';
+            document.getElementById('urlOnlyFieldsGroup').style.display = 'none';
+            document.getElementById('appFileGroup').style.display = 'none';
+            document.getElementById('appUrlGroup').style.display = 'none';
+        }
+
+        // Initialize when the modal opens
+        function openUploadModal(projectId, projectName) {
+            document.getElementById('projectIdInput').value = projectId;
+            document.getElementById('uploadProjectName').textContent = projectName;
+            document.getElementById('uploadForm').reset();
+            
+            // Clear platform selection (add empty option)
+            const platformSelect = document.getElementById('platformSelect');
+            platformSelect.innerHTML = '<option value="">Please select a platform</option>' +
+                                     '<option value="ios">iOS</option>' +
+                                     '<option value="android">Android</option>' +
+                                     '<option value="tvos">Apple TV</option>' +
+                                     '<option value="androidtv">Android TV</option>';
+            
+            // Hide all fields
+            hideAllUploadFields();
+            
+            // Open the modal
+            document.getElementById('uploadModal').style.display = 'flex';
+        }
+
+        // Edit version function
+        function editVersion(projectId, versionId) {
+            event.stopPropagation(); // Prevent version toggle
+            
+            // ... existing code ...
+        }
     </script>
 </body>
 </html>
