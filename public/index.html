@@ -916,9 +916,10 @@
                             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="30 30" stroke-dashoffset="0"></circle>
                             <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Processing...
+                        <span class="progress-text">Starting...</span>
                     `;
-                    
+
+                    // Create fetch request with progress tracking
                     const response = await fetch(`${CONFIG.baseUrl}/api/download/${projectId}/${versionId}`, {
                         method: 'GET',
                         credentials: 'include'
@@ -929,58 +930,70 @@
                         throw new Error(errorData.error || 'Failed to download file');
                     }
 
-                    const blob = await response.blob();
-                    
+                    // Get total file size
+                    const totalSize = parseInt(response.headers.get('Content-Length'), 10);
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    const fileName = contentDisposition?.split('filename=')[1]?.replace(/"/g, '') || 'download';
+
+                    // Create a ReadableStream to track progress
+                    const reader = response.body.getReader();
+                    let receivedLength = 0;
+                    const chunks = [];
+
+                    while(true) {
+                        const {done, value} = await reader.read();
+                        
+                        if (done) {
+                            break;
+                        }
+                        
+                        chunks.push(value);
+                        receivedLength += value.length;
+                        
+                        // Calculate and show progress
+                        const progress = (receivedLength / totalSize) * 100;
+                        const progressText = `${Math.round(progress)}%`;
+                        const progressSpan = clickedButton.querySelector('.progress-text');
+                        if (progressSpan) {
+                            progressSpan.textContent = progressText;
+                        }
+                    }
+
+                    // Concatenate chunks into a single Uint8Array
+                    const chunksAll = new Uint8Array(receivedLength);
+                    let position = 0;
+                    for(let chunk of chunks) {
+                        chunksAll.set(chunk, position);
+                        position += chunk.length;
+                    }
+
+                    // Create and download blob
+                    const blob = new Blob([chunksAll]);
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = url;
-                    a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download';
+                    a.download = fileName;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
                     document.body.removeChild(a);
 
-                    showNotification('Download started', 'success');
+                    showNotification('Download completed', 'success');
                     
                     // Restore button state after download completes
                     if (clickedButton) {
                         setTimeout(() => {
                             clickedButton.innerHTML = originalContent;
                             clickedButton.disabled = false;
-                        }, 1000); // Short delay to ensure user sees the feedback
+                        }, 1000);
                     }
-                } else {
-                    // Fallback if button not found
-                    const response = await fetch(`${CONFIG.baseUrl}/api/download/${projectId}/${versionId}`, {
-                        method: 'GET',
-                        credentials: 'include'
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || 'Failed to download file');
-                    }
-
-                    const blob = await response.blob();
-                    
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download';
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-
-                    showNotification('Download started', 'success');
                 }
             } catch (error) {
                 console.error('Download error:', error);
                 showNotification(error.message, 'error');
                 
-                // If error occurs, also restore the button
+                // If error occurs, restore the button
                 const clickedButton = event.target.closest('button');
                 if (clickedButton) {
                     const defaultIcon = `<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">

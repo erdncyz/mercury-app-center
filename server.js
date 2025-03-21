@@ -407,9 +407,57 @@ app.get('/api/download/:projectId/:versionId', (req, res) => {
             return res.status(404).json({ error: 'File not found on disk' });
         }
 
-        res.setHeader('Content-Type', 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename="${version.file}"`);
-        fs.createReadStream(filePath).pipe(res);
+        // Get file stats for content length
+        const stat = fs.statSync(filePath);
+        const fileSize = stat.size;
+
+        // Handle range requests for partial content
+        const range = req.headers.range;
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunksize = (end - start) + 1;
+            const file = fs.createReadStream(filePath, { start, end });
+
+            const head = {
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunksize,
+                'Content-Type': 'application/octet-stream',
+                'Content-Disposition': `attachment; filename="${version.file}"`,
+                'Cache-Control': 'public, max-age=3600'
+            };
+
+            res.writeHead(206, head);
+            file.pipe(res);
+        } else {
+            // Stream the entire file with optimized settings
+            const head = {
+                'Content-Length': fileSize,
+                'Content-Type': 'application/octet-stream',
+                'Content-Disposition': `attachment; filename="${version.file}"`,
+                'Accept-Ranges': 'bytes',
+                'Cache-Control': 'public, max-age=3600'
+            };
+
+            res.writeHead(200, head);
+
+            // Use a larger highWaterMark for faster streaming
+            const stream = fs.createReadStream(filePath, { 
+                highWaterMark: 64 * 1024 // 64KB chunks
+            });
+
+            // Handle stream errors
+            stream.on('error', (error) => {
+                console.error('Stream error:', error);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'Failed to stream file' });
+                }
+            });
+
+            stream.pipe(res);
+        }
     } catch (error) {
         console.error('Download error:', error);
         if (!res.headersSent) {
