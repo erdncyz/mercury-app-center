@@ -1384,8 +1384,9 @@
             
             userItem.appendChild(userInfo);
             
-            // Create action buttons (don't show for admin user)
-            if (user.username !== 'admin') {
+            // Create action buttons (don't show for current logged in user)
+            const currentUsername = localStorage.getItem('username');
+            if (user.username !== currentUsername) {
                 const userActions = document.createElement('div');
                 userActions.className = 'user-actions';
                 
@@ -1433,6 +1434,14 @@
                 userActions.appendChild(deleteBtn);
                 
                 userItem.appendChild(userActions);
+            } else {
+                // Add a message for the current user
+                const currentUserMessage = document.createElement('div');
+                currentUserMessage.className = 'current-user-message';
+                currentUserMessage.style.color = '#666';
+                currentUserMessage.style.fontStyle = 'italic';
+                currentUserMessage.textContent = '(Current logged in user)';
+                userItem.appendChild(currentUserMessage);
             }
             
             return userItem;

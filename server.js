@@ -623,6 +623,11 @@ app.put('/api/users/:userId/approval', async (req, res) => {
         if (userIndex === -1) {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
+
+        // Prevent modifying own account
+        if (userData.users[userIndex].username === req.session.username) {
+            return res.status(403).json({ success: false, error: 'Cannot modify your own account' });
+        }
         
         // Update approval status
         userData.users[userIndex].approved = approved;
@@ -664,6 +669,11 @@ app.put('/api/users/:userId/role', async (req, res) => {
         if (userIndex === -1) {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
+
+        // Prevent modifying own account
+        if (userData.users[userIndex].username === req.session.username) {
+            return res.status(403).json({ success: false, error: 'Cannot modify your own account' });
+        }
         
         // Update role
         userData.users[userIndex].role = role;
@@ -701,9 +711,9 @@ app.delete('/api/users/:userId', async (req, res) => {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
         
-        // Check if trying to delete admin user (username: "admin")
-        if (userData.users[userIndex].username === 'admin') {
-            return res.status(403).json({ success: false, error: 'Cannot delete the primary admin account' });
+        // Prevent deleting own account
+        if (userData.users[userIndex].username === req.session.username) {
+            return res.status(403).json({ success: false, error: 'Cannot delete your own account' });
         }
         
         // Remove user
