@@ -67,6 +67,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
     storage: storage,
+    limits: {
+        fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit
+        files: 1 // Sadece tek dosya
+    },
     fileFilter: function (req, file, cb) {
         if (file.originalname.endsWith('.app') || 
             file.originalname.endsWith('.ipa') || 
@@ -194,48 +198,54 @@ app.delete('/api/projects/:projectId', async (req, res) => {
 });
 
 app.post('/api/upload', (req, res) => {
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Transfer-Encoding', 'chunked');
+
     upload(req, res, function(err) {
         // File upload validation errors should be bypassed for URL-only platforms
         if (err && !(req.body.platform === 'ios' || req.body.platform === 'tvos')) {
             console.error('Upload error:', err);
-            return res.status(400).json({
-                success: false,
-                error: err.message
-            });
+            res.write(`data: ${JSON.stringify({ success: false, error: err.message })}\n\n`);
+            res.end();
+            return;
         }
 
         try {
             if (!req.session.username) {
-                return res.status(401).json({ success: false, error: 'User not authenticated' });
+                res.write(`data: ${JSON.stringify({ success: false, error: 'User not authenticated' })}\n\n`);
+                res.end();
+                return;
             }
             
             if (req.session.role !== 'admin') {
-                return res.status(403).json({ success: false, error: 'Only admin users can upload files' });
+                res.write(`data: ${JSON.stringify({ success: false, error: 'Only admin users can upload files' })}\n\n`);
+                res.end();
+                return;
             }
             
             const { projectId, platform, version, notes, environment, url } = req.body;
             
             if (!projectId || !platform || !version || !environment) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: 'Missing required fields' 
-                });
+                res.write(`data: ${JSON.stringify({ success: false, error: 'Missing required fields' })}\n\n`);
+                res.end();
+                return;
             }
 
             // Check that URL is provided for iOS/tvOS platforms
             if ((platform === 'ios' || platform === 'tvos') && !url) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Public test URL is required for iOS and Apple TV platforms'
-                });
+                res.write(`data: ${JSON.stringify({ success: false, error: 'Public test URL is required for iOS and Apple TV platforms' })}\n\n`);
+                res.end();
+                return;
             }
 
             // Check that file is provided for other platforms
             if (platform !== 'ios' && platform !== 'tvos' && !req.file) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'App file is required for this platform'
-                });
+                res.write(`data: ${JSON.stringify({ success: false, error: 'App file is required for this platform' })}\n\n`);
+                res.end();
+                return;
             }
 
             const projectsFile = path.join(__dirname, 'data', 'projects.json');
@@ -243,10 +253,9 @@ app.post('/api/upload', (req, res) => {
             const project = data.projects.find(p => p.id === projectId);
             
             if (!project) {
-                return res.status(404).json({ 
-                    success: false, 
-                    error: 'Project not found' 
-                });
+                res.write(`data: ${JSON.stringify({ success: false, error: 'Project not found' })}\n\n`);
+                res.end();
+                return;
             }
 
             // Version check - show error if same version and platform already exists
@@ -255,10 +264,9 @@ app.post('/api/upload', (req, res) => {
             );
 
             if (existingVersion) {
-                return res.status(400).json({
-                    success: false,
-                    error: `Version ${version} already exists for ${platform}. Please use a different version number.`
-                });
+                res.write(`data: ${JSON.stringify({ success: false, error: `Version ${version} already exists for ${platform}. Please use a different version number.` })}\n\n`);
+                res.end();
+                return;
             }
 
             let newVersion;
@@ -266,10 +274,9 @@ app.post('/api/upload', (req, res) => {
             // Handle URL uploads for iOS and tvOS platforms
             if (platform === 'ios' || platform === 'tvos') {
                 if (!url) {
-                    return res.status(400).json({
-                        success: false,
-                        error: 'Public test URL is required for iOS and Apple TV platforms'
-                    });
+                    res.write(`data: ${JSON.stringify({ success: false, error: 'Public test URL is required for iOS and Apple TV platforms' })}\n\n`);
+                    res.end();
+                    return;
                 }
                 
                 newVersion = {
@@ -293,23 +300,80 @@ app.post('/api/upload', (req, res) => {
                 fs.mkdirSync(projectDir, { recursive: true });
                 fs.mkdirSync(platformDir, { recursive: true });
 
-                // Copy the file
+                // Copy the file with progress tracking and optimized streaming
                 const filePath = path.join(platformDir, fileName);
-                fs.copyFileSync(req.file.path, filePath);
-                fs.unlinkSync(req.file.path); // Delete temporary file
+                const readStream = fs.createReadStream(req.file.path, {
+                    highWaterMark: 1024 * 1024 // 1MB chunks for better performance
+                });
+                const writeStream = fs.createWriteStream(filePath, {
+                    highWaterMark: 1024 * 1024 // 1MB chunks for better performance
+                });
+                const fileSize = fs.statSync(req.file.path).size;
+                let uploadedBytes = 0;
+                let lastProgressUpdate = 0;
 
-                newVersion = {
-                    id: Date.now().toString(),
-                    platform: platform.toLowerCase(),
-                    version,
-                    environment,
-                    notes,
-                    file: fileName,
-                    uploadedBy: req.session.username,
-                    uploadedAt: new Date().toISOString()
-                };
+                // Set up error handling for both streams
+                readStream.on('error', (error) => {
+                    console.error('Read stream error:', error);
+                    fs.unlinkSync(req.file.path); // Clean up temp file
+                    res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to read file' })}\n\n`);
+                    res.end();
+                });
+
+                writeStream.on('error', (error) => {
+                    console.error('Write stream error:', error);
+                    fs.unlinkSync(req.file.path); // Clean up temp file
+                    res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to write file' })}\n\n`);
+                    res.end();
+                });
+
+                // Track progress with throttling
+                readStream.on('data', (chunk) => {
+                    uploadedBytes += chunk.length;
+                    const progress = (uploadedBytes / fileSize) * 100;
+                    
+                    // Only send progress updates every 1% to reduce overhead
+                    if (progress - lastProgressUpdate >= 1) {
+                        res.write(`data: ${JSON.stringify({ progress })}\n\n`);
+                        lastProgressUpdate = progress;
+                    }
+                });
+
+                // Handle successful completion
+                writeStream.on('finish', () => {
+                    fs.unlinkSync(req.file.path); // Delete temporary file
+                    
+                    newVersion = {
+                        id: Date.now().toString(),
+                        platform: platform.toLowerCase(),
+                        version,
+                        environment,
+                        notes,
+                        file: fileName,
+                        uploadedBy: req.session.username,
+                        uploadedAt: new Date().toISOString()
+                    };
+
+                    if (!Array.isArray(project.versions)) {
+                        project.versions = [];
+                    }
+
+                    project.versions.push(newVersion);
+                    project.versions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+                    
+                    fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
+                    
+                    res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
+                    res.end();
+                });
+
+                // Pipe the streams
+                readStream.pipe(writeStream);
+
+                return; // Early return as we're handling the response in the stream events
             }
 
+            // For URL-based uploads, update the project immediately
             if (!Array.isArray(project.versions)) {
                 project.versions = [];
             }
@@ -319,10 +383,8 @@ app.post('/api/upload', (req, res) => {
             
             fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
             
-            res.json({ 
-                success: true, 
-                version: newVersion 
-            });
+            res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
+            res.end();
 
         } catch (error) {
             // In case of error, clean up the temporary file
@@ -330,10 +392,8 @@ app.post('/api/upload', (req, res) => {
                 fs.unlinkSync(req.file.path);
             }
             console.error('Upload error:', error);
-            res.status(500).json({ 
-                success: false, 
-                error: 'Failed to upload file: ' + error.message 
-            });
+            res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to upload file: ' + error.message })}\n\n`);
+            res.end();
         }
     });
 });
