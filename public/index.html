@@ -54,6 +54,7 @@
                     <option value="android">Android</option>
                     <option value="tvos">Apple TV</option>
                     <option value="androidtv">Android TV</option>
+                    <option value="huawei">Huawei</option>
                 </select>
             </div>
 
@@ -97,6 +98,7 @@
                                 <option value="android">Android</option>
                                 <option value="tvos">Apple TV</option>
                                 <option value="androidtv">Android TV</option>
+                                <option value="huawei">Huawei</option>
                             </select>
                         </div>
                         
@@ -466,7 +468,8 @@
                         ios: uniqueVersions.filter(v => v.platform === 'ios'),
                         android: uniqueVersions.filter(v => v.platform === 'android'),
                         tvos: uniqueVersions.filter(v => v.platform === 'tvos'),
-                        androidtv: uniqueVersions.filter(v => v.platform === 'androidtv')
+                        androidtv: uniqueVersions.filter(v => v.platform === 'androidtv'),
+                        huawei: uniqueVersions.filter(v => v.platform === 'huawei')
                     };
                     
                     card.innerHTML = `
@@ -690,7 +693,52 @@
                                     `).join('')}
                                 </div>
                             ` : ''}
-                            ${(!platforms.ios.length && !platforms.android.length && !platforms.tvos.length && !platforms.androidtv.length) ? `
+                            ${platforms.huawei.length > 0 ? `
+                                <div class="platform-item">
+                                    <div class="platform-header">
+                                        <span>🌐 Huawei</span>
+                                    </div>
+                                    ${platforms.huawei.map(version => `
+                                        <div class="version-item" onclick="toggleVersion(event, this)">
+                                            <div class="version-header">
+                                                <div class="version-title">
+                                                    <span class="version-number">v${version.version || 'N/A'}</span>
+                                                    <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
+                                                </div>
+                                                <div class="version-toggle">▼</div>
+                                            </div>
+                                            <div class="version-content">
+                                                <div class="version-info">
+                                                    <div class="version-uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
+                                                    <div class="version-environment-info">
+                                                        <span class="environment-label">Environment:</span>
+                                                        <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    </div>
+                                                    <div class="version-notes">${version.notes || 'No notes'}</div>
+                                                </div>
+                                                <div class="version-actions">
+                                                    <div class="modern-buttons-container">
+                                                        <button class="modern-button download-button" ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                                            </svg>
+                                                            Download
+                                                        </button>
+                                                        <button class="modern-button delete-button" onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                            </svg>
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                            ${(!platforms.ios.length && !platforms.android.length && !platforms.tvos.length && !platforms.androidtv.length && !platforms.huawei.length) ? `
                                 <div class="empty-platform-message">
                                     <p>No versions uploaded yet</p>
                                 </div>
@@ -1186,7 +1234,8 @@
                            (osFilter === 'ios' && platformType.includes('ios')) ||
                            (osFilter === 'android' && platformType.includes('android') && !platformType.includes('tv')) ||
                            (osFilter === 'tvos' && platformType.includes('apple tv')) ||
-                           (osFilter === 'androidtv' && platformType.includes('android tv'));
+                           (osFilter === 'androidtv' && platformType.includes('android tv')) ||
+                           (osFilter === 'huawei' && platformType.includes('huawei'));
                 });
 
                 const matchesSearch = title.includes(searchText);
@@ -1284,7 +1333,8 @@
                 ios: project.versions?.filter(v => v.platform === 'ios').slice(0, 5) || [],
                 android: project.versions?.filter(v => v.platform === 'android').slice(0, 5) || [],
                 tvos: project.versions?.filter(v => v.platform === 'tvos').slice(0, 5) || [],
-                androidtv: project.versions?.filter(v => v.platform === 'androidtv').slice(0, 5) || []
+                androidtv: project.versions?.filter(v => v.platform === 'androidtv').slice(0, 5) || [],
+                huawei: project.versions?.filter(v => v.platform === 'huawei').slice(0, 5) || []
             };
 
             // Show only the last 5 versions for each platform
@@ -1858,7 +1908,8 @@
                                      '<option value="ios">iOS</option>' +
                                      '<option value="android">Android</option>' +
                                      '<option value="tvos">Apple TV</option>' +
-                                     '<option value="androidtv">Android TV</option>';
+                                     '<option value="androidtv">Android TV</option>' +
+                                     '<option value="huawei">Huawei</option>';
             
             // Hide all fields
             hideAllUploadFields();
