@@ -120,13 +120,13 @@ node server.js
 ## Configuration
 
 Server Configuration:
-- Default port: 3000 (configurable via PORT environment variable)
+- Default port: 80 (configurable via PORT environment variable)
 - Session secret: Update in session middleware configuration
 - CORS settings: Configure allowed origins as needed
 
 ## Usage
 
-1. Access the application at `http://localhost:3000`
+1. Access the application at `http://localhost:80`
 
 2. Authentication:
    - Default admin: username: admin, password: admin

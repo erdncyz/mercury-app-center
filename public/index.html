@@ -132,7 +132,8 @@
                         
                         <div class="form-group" id="appFileGroup">
                             <label>App File</label>
-                            <input type="file" id="appFile" name="file">
+                            <input type="file" id="appFile" name="file" accept=".apk,.aab,.ipa,.zip">
+                            <div class="file-info">Accepted formats: APK, AAB, IPA, ZIP</div>
                         </div>
                         <div class="form-group" id="appUrlGroup" style="display:none;">
                             <label>Public Test URL</label>
@@ -162,7 +163,7 @@
 
     <script>
         const CONFIG = {
-            baseUrl: `http://${location.hostname}:${location.port || 3000}`
+            baseUrl: `http://${location.hostname}:${location.port || 80}`
         };
 
         let currentPage = 1;
@@ -882,6 +883,27 @@
                     submitButton.innerHTML = originalContent;
                     submitButton.disabled = false;
                     return;
+                }
+
+                // Validate file extension
+                const allowedExtensions = ['.apk', '.aab', '.ipa', '.zip'];
+                const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+                
+                if (!allowedExtensions.includes(fileExtension)) {
+                    showUploadError('Invalid file format. Please upload APK, AAB, IPA, or ZIP file.');
+                    submitButton.innerHTML = originalContent;
+                    submitButton.disabled = false;
+                    return;
+                }
+
+                // Platform specific validation
+                if (platform === 'android' || platform === 'huawei') {
+                    if (fileExtension !== '.apk' && fileExtension !== '.aab') {
+                        showUploadError('For Android and Huawei platforms, please upload APK or AAB file.');
+                        submitButton.innerHTML = originalContent;
+                        submitButton.disabled = false;
+                        return;
+                    }
                 }
             }
             
