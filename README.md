@@ -1,10 +1,11 @@
 # Mercury App Center
 
-A centralized platform for managing and distributing mobile applications across different platforms and environments.
+Mercury App Center is a centralized platform for managing and distributing your mobile applications. It supports application distribution for iOS, Android, Apple TV, Android TV, and Huawei platforms.
 
 ## Features
 
-- Multi-platform support (iOS, Android, Apple TV, Android TV)
+### Core Features
+- Multi-platform support (iOS, Android, Apple TV, Android TV, Huawei)
 - Environment-based versioning (Production, Test, Regression)
 - Secure file upload and download
 - Version history tracking
@@ -12,18 +13,22 @@ A centralized platform for managing and distributing mobile applications across 
 - Real-time updates
 - Role-based access control
 
-<img width="1255" alt="image" src="https://github.com/user-attachments/assets/802ff463-679f-47b0-b311-f8e8398a3743" />
+### Platform-Specific Features
+- **iOS & Apple TV**
+  - TestFlight integration
+  - Build distribution
+  - Version tracking
 
-<img width="1326" alt="image" src="https://github.com/user-attachments/assets/2bf2f765-74f2-46c6-b14a-41e18281622b" />
+- **Android & Android TV**
+  - Direct APK distribution
+  - Version management
+  - Build tracking
 
-<img width="1318" alt="image" src="https://github.com/user-attachments/assets/8174d8dd-90d5-43cf-8a80-2195fbc0312e" />
+- **Huawei**
+  - AppGallery integration
+  - Build management
 
-<img width="949" alt="image" src="https://github.com/user-attachments/assets/e832622e-0e27-4e64-9ff3-7ca1194b269b" />
-
-<img width="1277" alt="image" src="https://github.com/user-attachments/assets/8c648afb-0e90-4684-aba5-2453c4aa64fc" />
-
-## Features
-
+### Security Features
 - **Authentication**
   - User registration with admin approval
   - User role management (admin/user roles)
@@ -36,36 +41,287 @@ A centralized platform for managing and distributing mobile applications across 
   - User deletion functionality
   - Role-based access control
 
-- **Project Management**
-  - Create and manage multiple projects
-  - Project-based organization
-  - Version control for each project
-  - Project icons support
+### Project Management
+- Create and manage multiple projects
+- Project-based organization
+- Version control for each project
+- Project icons support
+- Environment management (Production/Test/Regression)
 
-- **Platform Support**
-  - iOS, Apple TV application management with TestFlight integration
-  - Android, Android TV application management (.apk)
-  - Multi-platform version tracking
+### User Interface
+- Modern, responsive design
+- Real-time updates
+- Search and filter capabilities
+- Recent uploads tracking
+- Version history
+- Platform-specific button controls
 
-- **User Interface**
-  - Modern, responsive design
-  - Real-time updates
-  - Search and filter capabilities
-  - Recent uploads tracking
-  - Version history
-  - Platform-specific button controls
+## API Integration
 
-- **File Management**
-  - Secure file upload/download
-  - Automatic file organization
-  - Version-based file naming
-  - Test notes for each version
+### Creating an API Key
+1. Log in to Admin Panel
+2. Navigate to "API Keys" tab
+3. Click "Generate New API Key"
+4. Enter a description for your API key
+5. Securely store the generated API key
 
-- **Role-Based Access Control**
-  - Admin users: Full access to create, edit, upload, delete, and manage users
-  - Regular users: Download-only access
-  - Restricted access to admin panels based on user role
-  - Platform-specific controls (Edit, Download, Delete buttons)
+### API Endpoints
+
+#### Application Upload
+```bash
+POST /api/external/upload
+```
+
+Headers:
+```
+x-api-key: YOUR_API_KEY
+```
+
+Parameters:
+- `file`: Application file (APK, AAB, IPA, etc.)
+- `projectName`: Project name
+- `platform`: Platform name (ios, android, tvos, androidtv, huawei)
+- `version`: Version number
+- `environment`: Environment (production, test, regression)
+- `notes`: Release notes (optional)
+
+## CI/CD Integration Examples
+
+### GitHub Actions
+
+```yaml
+name: Upload to Mercury App Center
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      # Android example
+      - name: Upload Android APK
+        run: |
+          curl -X POST "${{ secrets.MERCURY_APP_CENTER_URL }}/api/external/upload" \
+            -H "x-api-key: ${{ secrets.MERCURY_API_KEY }}" \
+            -F "file=@app/build/outputs/apk/release/app-release.apk" \
+            -F "projectName=Your App Name" \
+            -F "platform=android" \
+            -F "version=${GITHUB_REF#refs/tags/v}" \
+            -F "environment=production" \
+            -F "notes=Release from GitHub Actions"
+
+      # iOS example
+      - name: Upload iOS Build
+        run: |
+          curl -X POST "${{ secrets.MERCURY_APP_CENTER_URL }}/api/external/upload" \
+            -H "x-api-key: ${{ secrets.MERCURY_API_KEY }}" \
+            -F "projectName=Your App Name" \
+            -F "platform=ios" \
+            -F "version=${GITHUB_REF#refs/tags/v}" \
+            -F "url=https://testflight.apple.com/join/your-public-link" \
+            -F "environment=production" \
+            -F "notes=Release from GitHub Actions"
+```
+
+### Jenkins Pipeline
+
+```groovy
+pipeline {
+    agent any
+    
+    environment {
+        MERCURY_API_KEY = credentials('mercury-api-key')
+        MERCURY_URL = 'https://your-mercury-server.com'
+    }
+    
+    stages {
+        stage('Upload to Mercury') {
+            steps {
+                // Android example
+                sh '''
+                    curl -X POST "${MERCURY_URL}/api/external/upload" \\
+                        -H "x-api-key: ${MERCURY_API_KEY}" \\
+                        -F "file=@app/build/outputs/apk/release/app-release.apk" \\
+                        -F "projectName=Your App Name" \\
+                        -F "platform=android" \\
+                        -F "version=${BUILD_NUMBER}" \\
+                        -F "environment=production" \\
+                        -F "notes=Build from Jenkins Pipeline"
+                '''
+                
+                // iOS example
+                sh '''
+                    curl -X POST "${MERCURY_URL}/api/external/upload" \\
+                        -H "x-api-key: ${MERCURY_API_KEY}" \\
+                        -F "projectName=Your App Name" \\
+                        -F "platform=ios" \\
+                        -F "version=${BUILD_NUMBER}" \\
+                        -F "url=https://testflight.apple.com/join/your-public-link" \\
+                        -F "environment=production" \\
+                        -F "notes=Build from Jenkins Pipeline"
+                '''
+            }
+        }
+    }
+}
+```
+
+### Azure DevOps Pipeline
+
+```yaml
+# azure-pipelines.yml
+trigger:
+  tags:
+    include:
+      - 'v*'
+  branches:
+    include:
+      - main
+      - develop
+
+# Variable group definitions
+variables:
+- group: mercury-app-center-prod
+- group: mercury-app-center-test
+- name: MERCURY_URL
+  value: 'https://your-mercury-server.com'
+
+stages:
+- stage: Build
+  jobs:
+  - job: BuildApp
+    pool:
+      vmImage: 'macos-latest'
+    steps:
+    # Android Build
+    - task: Gradle@2
+      inputs:
+        workingDirectory: 'android'
+        gradleWrapperFile: 'android/gradlew'
+        gradleOptions: '-Xmx3072m'
+        publishJUnitResults: false
+        testResultsFiles: '**/TEST-*.xml'
+        tasks: 'assembleRelease'
+    
+    # iOS Build
+    - task: Xcode@5
+      inputs:
+        actions: 'build'
+        scheme: 'YourAppScheme'
+        sdk: 'iphoneos'
+        configuration: 'Release'
+        xcWorkspacePath: 'ios/YourApp.xcworkspace'
+        xcodeVersion: 'default'
+        
+    - task: CopyFiles@2
+      inputs:
+        contents: '**/*.ipa'
+        targetFolder: '$(Build.ArtifactStagingDirectory)'
+    
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)'
+        artifactName: 'drop'
+
+- stage: DeployTest
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/develop'))
+  dependsOn: Build
+  jobs:
+  - deployment: DeployToTest
+    environment: 'test'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: 'drop'
+          
+          # Android Test Upload
+          - script: |
+              curl -X POST "$(MERCURY_URL)/api/external/upload" \
+                -H "x-api-key: $(MERCURY_API_KEY)" \
+                -F "file=@$(Pipeline.Workspace)/drop/android/app/build/outputs/apk/release/app-release.apk" \
+                -F "projectName=$(APP_NAME)" \
+                -F "platform=android" \
+                -F "version=$(Build.BuildNumber)" \
+                -F "environment=test" \
+                -F "notes=Test build from Azure DevOps (Build: $(Build.BuildNumber))"
+            displayName: 'Upload Android Test Build'
+            
+          # iOS Test Upload
+          - script: |
+              curl -X POST "$(MERCURY_URL)/api/external/upload" \
+                -H "x-api-key: $(MERCURY_API_KEY)" \
+                -F "projectName=$(APP_NAME)" \
+                -F "platform=ios" \
+                -F "version=$(Build.BuildNumber)" \
+                -F "url=$(TESTFLIGHT_URL)" \
+                -F "environment=test" \
+                -F "notes=Test build from Azure DevOps (Build: $(Build.BuildNumber))"
+            displayName: 'Upload iOS Test Build'
+
+- stage: DeployProduction
+  condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/tags/v'))
+  dependsOn: Build
+  jobs:
+  - deployment: DeployToProduction
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: 'drop'
+          
+          # Android Production Upload
+          - script: |
+              curl -X POST "$(MERCURY_URL)/api/external/upload" \
+                -H "x-api-key: $(MERCURY_API_KEY)" \
+                -F "file=@$(Pipeline.Workspace)/drop/android/app/build/outputs/apk/release/app-release.apk" \
+                -F "projectName=$(APP_NAME)" \
+                -F "platform=android" \
+                -F "version=$(Build.SourceBranchName)" \
+                -F "environment=production" \
+                -F "notes=Production release from Azure DevOps (Version: $(Build.SourceBranchName))"
+            displayName: 'Upload Android Production Build'
+            
+          # iOS Production Upload
+          - script: |
+              curl -X POST "$(MERCURY_URL)/api/external/upload" \
+                -H "x-api-key: $(MERCURY_API_KEY)" \
+                -F "projectName=$(APP_NAME)" \
+                -F "platform=ios" \
+                -F "version=$(Build.SourceBranchName)" \
+                -F "url=$(TESTFLIGHT_URL)" \
+                -F "environment=production" \
+                -F "notes=Production release from Azure DevOps (Version: $(Build.SourceBranchName))"
+            displayName: 'Upload iOS Production Build'
+```
+
+Azure DevOps Pipeline Variable Groups:
+
+1. mercury-app-center-prod (For Production)
+   - MERCURY_API_KEY: Production API key
+   - APP_NAME: Application name
+   - TESTFLIGHT_URL: TestFlight URL
+
+2. mercury-app-center-test (For Test)
+   - MERCURY_API_KEY: Test API key
+   - APP_NAME: Application name
+   - TESTFLIGHT_URL: Test TestFlight URL
+
+Pipeline Features:
+- Tag and branch-based triggers
+- Separate test and production environments
+- Secure variable management
+- Build and deploy stages
+- Environment-based approval mechanism
+- Detailed build and version information
 
 ## Installation
 
@@ -124,41 +380,6 @@ Server Configuration:
 - Session secret: Update in session middleware configuration
 - CORS settings: Configure allowed origins as needed
 
-## Usage
-
-1. Access the application at `http://localhost:80`
-
-2. Authentication:
-   - Default admin: username: admin, password: admin
-   - User registration with admin approval
-   - Role-based access (admin vs regular users)
-   - Session-based authentication
-
-3. User Management (Admin Only):
-   - Approve/reject new user registrations
-   - Grant/revoke admin privileges
-   - Delete users (except primary admin)
-   - View all users and their status
-
-4. Project Management:
-   - Create new projects (admin only)
-   - Upload application versions (admin only)
-   - Download application versions (all users)
-   - Edit version information (admin only)
-   - Delete projects or versions (admin only)
-
-5. Version Control:
-   - Upload new versions (admin only)
-   - Edit version details (admin only)
-   - Add version notes
-   - Track version history
-   - Download specific versions (all users)
-
-6. Platform-Specific Features:
-   - iOS and Apple TV: TestFlight integration with instructions
-   - Android and Android TV: Direct APK downloads
-   - Platform-specific button visibility (Edit button only for admin users)
-
 ## Directory Structure
 
 ```bash
@@ -210,6 +431,8 @@ mercury-app-center/
 - Secure file upload/download
 - Input validation and sanitization
 - Admin-only access for critical operations
+- API key management and rotation
+- Environment-based access control
 
 ## Development
 
@@ -226,10 +449,6 @@ mercury-app-center/
 4. Push to the branch
 5. Create a Pull Request
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Support
 
 For support, please create an issue in the repository.
@@ -240,3 +459,7 @@ For support, please create an issue in the repository.
 - Regular backup of projects.json and users.json is recommended
 - Monitor disk space for uploads directory
 - Admin users have exclusive access to Edit, Delete, and Upload functions
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

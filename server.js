@@ -6,6 +6,7 @@ const multer = require('multer');
 const fs = require('fs');
 const session = require('express-session');
 const config = require('./config');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 
@@ -54,9 +55,10 @@ const isAuthenticated = (req, res, next) => {
     next();
 };
 
+// Multer configuration
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const uploadPath = './uploads/temp';
+        const uploadPath = path.join(__dirname, 'uploads', 'temp');
         fs.mkdirSync(uploadPath, { recursive: true });
         cb(null, uploadPath);
     },
@@ -65,22 +67,23 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ 
-    storage: storage,
-    limits: {
-        fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit
-        files: 1 // Sadece tek dosya
-    },
-    fileFilter: function (req, file, cb) {
-        if (file.originalname.endsWith('.app') || 
-            file.originalname.endsWith('.ipa') || 
-            file.originalname.endsWith('.apk')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Invalid file type. Only .ipa, .apk, and .app files are allowed.'));
-        }
+const fileFilter = (req, file, cb) => {
+    const allowedTypes = ['.ipa', '.apk', '.aab', '.app'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedTypes.includes(ext)) {
+        cb(null, true);
+    } else {
+        cb(new Error('Invalid file type. Only .ipa, .apk, .aab, and .app files are allowed.'));
     }
-}).single('file');
+};
+
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: 2 * 1024 * 1024 * 1024 // 2GB limit
+    }
+});
 
 app.post('/api/projects', async (req, res) => {
     try {
@@ -197,205 +200,195 @@ app.delete('/api/projects/:projectId', async (req, res) => {
     }
 });
 
-app.post('/api/upload', (req, res) => {
+app.post('/api/upload', upload.single('file'), (req, res) => {
     // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Transfer-Encoding', 'chunked');
 
-    upload(req, res, function(err) {
-        // File upload validation errors should be bypassed for URL-only platforms
-        if (err && !(req.body.platform === 'ios' || req.body.platform === 'tvos')) {
-            console.error('Upload error:', err);
-            res.write(`data: ${JSON.stringify({ success: false, error: err.message })}\n\n`);
+    try {
+        if (!req.session.username) {
+            res.write(`data: ${JSON.stringify({ success: false, error: 'User not authenticated' })}\n\n`);
+            res.end();
+            return;
+        }
+        
+        if (req.session.role !== 'admin') {
+            res.write(`data: ${JSON.stringify({ success: false, error: 'Only admin users can upload files' })}\n\n`);
+            res.end();
+            return;
+        }
+        
+        const { projectId, platform, version, notes, environment, url } = req.body;
+        
+        if (!projectId || !platform || !version || !environment) {
+            res.write(`data: ${JSON.stringify({ success: false, error: 'Missing required fields' })}\n\n`);
             res.end();
             return;
         }
 
-        try {
-            if (!req.session.username) {
-                res.write(`data: ${JSON.stringify({ success: false, error: 'User not authenticated' })}\n\n`);
-                res.end();
-                return;
-            }
-            
-            if (req.session.role !== 'admin') {
-                res.write(`data: ${JSON.stringify({ success: false, error: 'Only admin users can upload files' })}\n\n`);
-                res.end();
-                return;
-            }
-            
-            const { projectId, platform, version, notes, environment, url } = req.body;
-            
-            if (!projectId || !platform || !version || !environment) {
-                res.write(`data: ${JSON.stringify({ success: false, error: 'Missing required fields' })}\n\n`);
-                res.end();
-                return;
-            }
+        // Check that URL is provided for iOS/tvOS platforms
+        if ((platform === 'ios' || platform === 'tvos') && !url) {
+            res.write(`data: ${JSON.stringify({ success: false, error: 'Public test URL is required for iOS and Apple TV platforms' })}\n\n`);
+            res.end();
+            return;
+        }
 
-            // Check that URL is provided for iOS/tvOS platforms
-            if ((platform === 'ios' || platform === 'tvos') && !url) {
+        // Check that file is provided for other platforms
+        if (platform !== 'ios' && platform !== 'tvos' && !req.file) {
+            res.write(`data: ${JSON.stringify({ success: false, error: 'App file is required for this platform' })}\n\n`);
+            res.end();
+            return;
+        }
+
+        const projectsFile = path.join(__dirname, 'data', 'projects.json');
+        let data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+        const project = data.projects.find(p => p.id === projectId);
+        
+        if (!project) {
+            res.write(`data: ${JSON.stringify({ success: false, error: 'Project not found' })}\n\n`);
+            res.end();
+            return;
+        }
+
+        // Version check - show error if same version and platform already exists
+        const existingVersion = project.versions?.find(v => 
+            v.version === version && v.platform === platform.toLowerCase()
+        );
+
+        if (existingVersion) {
+            res.write(`data: ${JSON.stringify({ success: false, error: `Version ${version} already exists for ${platform}. Please use a different version number.` })}\n\n`);
+            res.end();
+            return;
+        }
+
+        let newVersion;
+
+        // Handle URL uploads for iOS and tvOS platforms
+        if (platform === 'ios' || platform === 'tvos') {
+            if (!url) {
                 res.write(`data: ${JSON.stringify({ success: false, error: 'Public test URL is required for iOS and Apple TV platforms' })}\n\n`);
                 res.end();
                 return;
             }
-
-            // Check that file is provided for other platforms
-            if (platform !== 'ios' && platform !== 'tvos' && !req.file) {
-                res.write(`data: ${JSON.stringify({ success: false, error: 'App file is required for this platform' })}\n\n`);
-                res.end();
-                return;
-            }
-
-            const projectsFile = path.join(__dirname, 'data', 'projects.json');
-            let data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
-            const project = data.projects.find(p => p.id === projectId);
             
-            if (!project) {
-                res.write(`data: ${JSON.stringify({ success: false, error: 'Project not found' })}\n\n`);
+            newVersion = {
+                id: Date.now().toString(),
+                platform: platform.toLowerCase(),
+                version: version || 'URL Only',
+                environment: environment || 'production',
+                notes: notes || '',
+                url: url,
+                uploadedBy: req.session.username,
+                uploadedAt: new Date().toISOString()
+            };
+        } 
+        // Handle file uploads for other platforms
+        else {
+            const fileName = `${version}-${req.file.originalname}`;
+            const projectDir = path.join(__dirname, 'uploads', 'projects', project.name);
+            const platformDir = path.join(projectDir, platform.toLowerCase());
+            
+            // Create directories
+            fs.mkdirSync(projectDir, { recursive: true });
+            fs.mkdirSync(platformDir, { recursive: true });
+
+            // Copy the file with progress tracking and optimized streaming
+            const filePath = path.join(platformDir, fileName);
+            const readStream = fs.createReadStream(req.file.path, {
+                highWaterMark: 1024 * 1024 // 1MB chunks for better performance
+            });
+            const writeStream = fs.createWriteStream(filePath, {
+                highWaterMark: 1024 * 1024 // 1MB chunks for better performance
+            });
+            const fileSize = fs.statSync(req.file.path).size;
+            let uploadedBytes = 0;
+            let lastProgressUpdate = 0;
+
+            // Set up error handling for both streams
+            readStream.on('error', (error) => {
+                console.error('Read stream error:', error);
+                fs.unlinkSync(req.file.path); // Clean up temp file
+                res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to read file' })}\n\n`);
                 res.end();
-                return;
-            }
+            });
 
-            // Version check - show error if same version and platform already exists
-            const existingVersion = project.versions?.find(v => 
-                v.version === version && v.platform === platform.toLowerCase()
-            );
-
-            if (existingVersion) {
-                res.write(`data: ${JSON.stringify({ success: false, error: `Version ${version} already exists for ${platform}. Please use a different version number.` })}\n\n`);
+            writeStream.on('error', (error) => {
+                console.error('Write stream error:', error);
+                fs.unlinkSync(req.file.path); // Clean up temp file
+                res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to write file' })}\n\n`);
                 res.end();
-                return;
-            }
+            });
 
-            let newVersion;
-
-            // Handle URL uploads for iOS and tvOS platforms
-            if (platform === 'ios' || platform === 'tvos') {
-                if (!url) {
-                    res.write(`data: ${JSON.stringify({ success: false, error: 'Public test URL is required for iOS and Apple TV platforms' })}\n\n`);
-                    res.end();
-                    return;
+            // Track progress with throttling
+            readStream.on('data', (chunk) => {
+                uploadedBytes += chunk.length;
+                const progress = (uploadedBytes / fileSize) * 100;
+                
+                // Only send progress updates every 1% to reduce overhead
+                if (progress - lastProgressUpdate >= 1) {
+                    res.write(`data: ${JSON.stringify({ progress })}\n\n`);
+                    lastProgressUpdate = progress;
                 }
+            });
+
+            // Handle successful completion
+            writeStream.on('finish', () => {
+                fs.unlinkSync(req.file.path); // Delete temporary file
                 
                 newVersion = {
                     id: Date.now().toString(),
                     platform: platform.toLowerCase(),
-                    version: version || 'URL Only',
-                    environment: environment || 'production',
-                    notes: notes || '',
-                    url: url,
+                    version,
+                    environment,
+                    notes,
+                    file: fileName,
                     uploadedBy: req.session.username,
                     uploadedAt: new Date().toISOString()
                 };
-            } 
-            // Handle file uploads for other platforms
-            else {
-                const fileName = `${version}-${req.file.originalname}`;
-                const projectDir = path.join(__dirname, 'uploads', 'projects', project.name);
-                const platformDir = path.join(projectDir, platform.toLowerCase());
+
+                if (!Array.isArray(project.versions)) {
+                    project.versions = [];
+                }
+
+                project.versions.push(newVersion);
+                project.versions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
                 
-                // Create directories
-                fs.mkdirSync(projectDir, { recursive: true });
-                fs.mkdirSync(platformDir, { recursive: true });
+                fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
+                
+                res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
+                res.end();
+            });
 
-                // Copy the file with progress tracking and optimized streaming
-                const filePath = path.join(platformDir, fileName);
-                const readStream = fs.createReadStream(req.file.path, {
-                    highWaterMark: 1024 * 1024 // 1MB chunks for better performance
-                });
-                const writeStream = fs.createWriteStream(filePath, {
-                    highWaterMark: 1024 * 1024 // 1MB chunks for better performance
-                });
-                const fileSize = fs.statSync(req.file.path).size;
-                let uploadedBytes = 0;
-                let lastProgressUpdate = 0;
+            // Pipe the streams
+            readStream.pipe(writeStream);
 
-                // Set up error handling for both streams
-                readStream.on('error', (error) => {
-                    console.error('Read stream error:', error);
-                    fs.unlinkSync(req.file.path); // Clean up temp file
-                    res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to read file' })}\n\n`);
-                    res.end();
-                });
-
-                writeStream.on('error', (error) => {
-                    console.error('Write stream error:', error);
-                    fs.unlinkSync(req.file.path); // Clean up temp file
-                    res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to write file' })}\n\n`);
-                    res.end();
-                });
-
-                // Track progress with throttling
-                readStream.on('data', (chunk) => {
-                    uploadedBytes += chunk.length;
-                    const progress = (uploadedBytes / fileSize) * 100;
-                    
-                    // Only send progress updates every 1% to reduce overhead
-                    if (progress - lastProgressUpdate >= 1) {
-                        res.write(`data: ${JSON.stringify({ progress })}\n\n`);
-                        lastProgressUpdate = progress;
-                    }
-                });
-
-                // Handle successful completion
-                writeStream.on('finish', () => {
-                    fs.unlinkSync(req.file.path); // Delete temporary file
-                    
-                    newVersion = {
-                        id: Date.now().toString(),
-                        platform: platform.toLowerCase(),
-                        version,
-                        environment,
-                        notes,
-                        file: fileName,
-                        uploadedBy: req.session.username,
-                        uploadedAt: new Date().toISOString()
-                    };
-
-                    if (!Array.isArray(project.versions)) {
-                        project.versions = [];
-                    }
-
-                    project.versions.push(newVersion);
-                    project.versions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
-                    
-                    fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
-                    
-                    res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
-                    res.end();
-                });
-
-                // Pipe the streams
-                readStream.pipe(writeStream);
-
-                return; // Early return as we're handling the response in the stream events
-            }
-
-            // For URL-based uploads, update the project immediately
-            if (!Array.isArray(project.versions)) {
-                project.versions = [];
-            }
-
-            project.versions.push(newVersion);
-            project.versions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
-            
-            fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
-            
-            res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
-            res.end();
-
-        } catch (error) {
-            // In case of error, clean up the temporary file
-            if (req.file && req.file.path) {
-                fs.unlinkSync(req.file.path);
-            }
-            console.error('Upload error:', error);
-            res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to upload file: ' + error.message })}\n\n`);
-            res.end();
+            return; // Early return as we're handling the response in the stream events
         }
-    });
+
+        // For URL-based uploads, update the project immediately
+        if (!Array.isArray(project.versions)) {
+            project.versions = [];
+        }
+
+        project.versions.push(newVersion);
+        project.versions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+        
+        fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
+        
+        res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
+        res.end();
+
+    } catch (error) {
+        // In case of error, clean up the temporary file
+        if (req.file && req.file.path) {
+            fs.unlinkSync(req.file.path);
+        }
+        console.error('Upload error:', error);
+        res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to upload file: ' + error.message })}\n\n`);
+        res.end();
+    }
 });
 
 app.get('/api/projects', async (req, res) => {
@@ -966,6 +959,198 @@ app.get('/api/projects/:projectId/versions/:versionId', isAuthenticated, async (
             success: false, 
             error: 'Failed to get version: ' + error.message 
         });
+    }
+});
+
+// API Keys file path
+const API_KEYS_FILE = path.join(__dirname, 'data', 'api_keys.json');
+
+// Initialize API keys file if it doesn't exist
+if (!fs.existsSync(API_KEYS_FILE)) {
+    fs.writeFileSync(API_KEYS_FILE, JSON.stringify([], null, 2));
+}
+
+// Middleware to check if user is admin
+const isAdmin = (req, res, next) => {
+    if (!req.session.username || req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+};
+
+// Middleware to validate API key
+const apiKeyMiddleware = async (req, res, next) => {
+    const apiKey = req.headers['x-api-key'];
+    
+    if (!apiKey) {
+        return res.status(401).json({ error: 'API key is required' });
+    }
+
+    try {
+        const keys = JSON.parse(fs.readFileSync(API_KEYS_FILE, 'utf8'));
+        const key = keys.find(k => k.key === apiKey && k.isActive);
+        
+        if (!key) {
+            return res.status(401).json({ error: 'Invalid or inactive API key' });
+        }
+
+        // Update last used timestamp
+        key.lastUsed = new Date().toISOString();
+        fs.writeFileSync(API_KEYS_FILE, JSON.stringify(keys, null, 2));
+        
+        next();
+    } catch (error) {
+        console.error('API key validation error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// API Key Management Endpoints
+app.get('/api/keys', isAdmin, (req, res) => {
+    try {
+        const keys = JSON.parse(fs.readFileSync(API_KEYS_FILE, 'utf8'));
+        res.json(keys);
+    } catch (error) {
+        console.error('Error reading API keys:', error);
+        res.status(500).json({ error: 'Failed to read API keys' });
+    }
+});
+
+app.post('/api/keys', isAdmin, (req, res) => {
+    try {
+        const { description } = req.body;
+        
+        if (!description) {
+            return res.status(400).json({ error: 'Description is required' });
+        }
+
+        const keys = JSON.parse(fs.readFileSync(API_KEYS_FILE, 'utf8'));
+        const newKey = {
+            id: uuidv4(),
+            key: `mk_${uuidv4()}`, // Prefix with 'mk_' to identify Mercury keys
+            description,
+            createdBy: req.session.username,
+            createdAt: new Date().toISOString(),
+            lastUsed: null,
+            isActive: true
+        };
+
+        keys.push(newKey);
+        fs.writeFileSync(API_KEYS_FILE, JSON.stringify(keys, null, 2));
+        
+        res.json(newKey);
+    } catch (error) {
+        console.error('Error creating API key:', error);
+        res.status(500).json({ error: 'Failed to create API key' });
+    }
+});
+
+app.delete('/api/keys/:keyId', isAdmin, (req, res) => {
+    try {
+        const { keyId } = req.params;
+        const keys = JSON.parse(fs.readFileSync(API_KEYS_FILE, 'utf8'));
+        const keyIndex = keys.findIndex(k => k.id === keyId);
+        
+        if (keyIndex === -1) {
+            return res.status(404).json({ error: 'API key not found' });
+        }
+
+        keys.splice(keyIndex, 1);
+        fs.writeFileSync(API_KEYS_FILE, JSON.stringify(keys, null, 2));
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting API key:', error);
+        res.status(500).json({ error: 'Failed to delete API key' });
+    }
+});
+
+// External Upload Endpoint
+app.post('/api/external/upload', apiKeyMiddleware, upload.single('file'), async (req, res) => {
+    try {
+        const { projectName, platform, version, environment = 'production', notes = '' } = req.body;
+        
+        if (!projectName || !platform) {
+            return res.status(400).json({ error: 'Project name and platform are required' });
+        }
+
+        // Validate platform
+        const validPlatforms = ['ios', 'android', 'tvos', 'androidtv', 'huawei'];
+        if (!validPlatforms.includes(platform.toLowerCase())) {
+            return res.status(400).json({ error: 'Invalid platform' });
+        }
+
+        // For iOS/tvOS, require URL instead of file
+        if ((platform === 'ios' || platform === 'tvos') && !req.body.url) {
+            return res.status(400).json({ error: 'URL is required for iOS/tvOS platforms' });
+        }
+
+        // For other platforms, require file
+        if (platform !== 'ios' && platform !== 'tvos' && !req.file) {
+            return res.status(400).json({ error: 'File is required for this platform' });
+        }
+
+        // Check if project exists, if not create it
+        const projectsFile = path.join(__dirname, 'data', 'projects.json');
+        let projectsData = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+        let project = projectsData.projects.find(p => p.name.toLowerCase() === projectName.toLowerCase());
+        
+        if (!project) {
+            project = {
+                id: Date.now().toString(),
+                name: projectName,
+                owner: 'API',
+                created: new Date().toISOString(),
+                versions: []
+            };
+            projectsData.projects.push(project);
+        }
+
+        // Create version entry
+        const versionEntry = {
+            id: Date.now().toString(),
+            version: version || '1.0.0',
+            platform,
+            uploadedAt: new Date().toISOString(),
+            uploadedBy: 'API',
+            environment,
+            notes,
+            downloads: 0
+        };
+
+        if (platform === 'ios' || platform === 'tvos') {
+            versionEntry.url = req.body.url;
+        } else if (req.file) {
+            const fileExt = path.extname(req.file.originalname);
+            const fileName = `${version}-${req.file.originalname}`;
+            const platformDir = path.join(__dirname, 'uploads', 'projects', project.name, platform.toLowerCase());
+            const filePath = path.join(platformDir, fileName);
+            
+            // Create platform directory if it doesn't exist
+            fs.mkdirSync(platformDir, { recursive: true });
+            
+            // Move file from temp to final location
+            fs.renameSync(req.file.path, filePath);
+            versionEntry.file = fileName;
+        }
+
+        project.versions.unshift(versionEntry);
+        fs.writeFileSync(projectsFile, JSON.stringify(projectsData, null, 2));
+
+        res.json({
+            success: true,
+            project: {
+                id: project.id,
+                name: project.name
+            },
+            version: versionEntry
+        });
+    } catch (error) {
+        console.error('External upload error:', error);
+        if (req.file && req.file.path) {
+            fs.unlinkSync(req.file.path);
+        }
+        res.status(500).json({ error: 'Upload failed: ' + error.message });
     }
 });
 
