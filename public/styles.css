@@ -1281,129 +1281,187 @@ main {
 /* Admin Panel Styles */
 .user-item {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     justify-content: space-between;
-    align-items: center;
-    padding: 15px;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    background-color: white;
+    align-items: stretch;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    margin-bottom: 1rem;
+    background-color: #fdfdff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+    transition: box-shadow 0.2s ease;
+    overflow: hidden;
 }
 
-.user-info {
-    flex: 1;
+.user-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    background-color: white;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s ease;
+}
+
+.user-item.active .user-item-header {
+    border-bottom-color: var(--border-color);
 }
 
 .user-name {
-    font-size: 18px;
-    font-weight: bold;
-    margin-bottom: 5px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-color);
+    margin: 0;
+    padding: 0;
+    border: none;
+    flex-grow: 1;
+    margin-right: 1rem;
+}
+
+.current-user-indicator {
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: #6b7280;
+    margin-left: 0.5rem;
+    font-style: italic;
+}
+
+.user-item-toggle {
+    font-size: 0.8rem;
+    color: #6b7280;
+    transition: transform 0.3s ease;
+    margin-right: 0.5rem;
+}
+
+.user-item.active .user-item-toggle {
+    transform: rotate(180deg);
+}
+
+.user-item-content {
+    display: none;
+    padding: 1rem 1.25rem;
+    background-color: #f9fafb;
+}
+
+.user-item.active .user-item-content {
+    display: block;
+}
+
+.user-info {
+    margin-bottom: 0;
 }
 
 .user-details {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    color: #555;
-    font-size: 14px;
+    grid-template-columns: auto 1fr;
+    gap: 0.6rem 1rem;
+    color: #374151;
+    font-size: 0.9rem;
+    margin-top: 0;
+    padding-bottom: 1rem;
 }
+
+.user-details > div {
+    padding: 0.1rem 0;
+    word-break: break-word;
+}
+
+.user-details > div::before {
+    font-weight: 500;
+    color: #6b7280;
+    margin-right: 0.5em;
+    display: inline-block;
+}
+
+.user-details .user-username::before { content: "Username"; }
+.user-details .user-email::before { content: "Email"; }
+.user-details .user-role::before { content: "Role"; }
+.user-details .user-status::before { content: "Status"; }
+.user-details .user-created::before { content: "Registered"; }
+.user-details .user-projects > strong { display: none; }
+.user-details .user-projects::before { content: "Projects"; }
+.user-details .user-projects .project-list { color: #1f2937; font-weight: 500; }
 
 .user-actions {
     display: flex;
-    gap: 10px;
-}
-
-.approve-btn, .revoke-btn, .admin-btn, .revoke-admin-btn {
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-weight: 500;
-    cursor: pointer;
-    border: none;
-    transition: background-color 0.2s, transform 0.1s;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: 0;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
 }
 
 .approve-btn {
-    background-color: #4CAF50;
+    background-color: #10b981;
     color: white;
 }
 
 .approve-btn:hover {
-    background-color: #45a049;
+    background-color: #059669;
 }
 
 .revoke-btn {
-    background-color: #f44336;
+    background-color: #ef4444;
     color: white;
 }
 
 .revoke-btn:hover {
-    background-color: #d32f2f;
+    background-color: #dc2626;
 }
 
 .admin-btn {
-    background-color: #3f51b5;
+    background-color: #6366f1;
     color: white;
 }
 
 .admin-btn:hover {
-    background-color: #303f9f;
+    background-color: #4f46e5;
 }
 
 .revoke-admin-btn {
-    background-color: #ff9800;
+    background-color: #f59e0b;
     color: white;
 }
 
 .revoke-admin-btn:hover {
-    background-color: #f57c00;
+    background-color: #d97706;
 }
 
-.users-section {
-    margin-bottom: 30px;
+.manage-projects-btn {
+    background-color: #6b7280;
+    color: white;
 }
 
-.users-section h3 {
-    margin-bottom: 15px;
-    padding-bottom: 5px;
-    border-bottom: 1px solid #e0e0e0;
-}
-
-/* Mobile Responsive Admin Panel */
-@media (max-width: 768px) {
-    .user-item {
-        flex-direction: column;
-    }
-    
-    .user-actions {
-        margin-left: 0;
-        margin-top: 1rem;
-        flex-direction: row;
-        width: 100%;
-    }
-    
-    .approve-btn, .revoke-btn {
-        flex: 1;
-        text-align: center;
-    }
+.manage-projects-btn:hover {
+    background-color: #4b5563;
 }
 
 .delete-btn {
-    background-color: #ef4444;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    margin-left: 8px;
-    display: flex;
-    align-items: center;
-    transition: background-color 0.3s;
+    /* This class is no longer used for the button, only the icon */
+    /* Styles can be removed or repurposed if needed elsewhere */
 }
 
 .delete-btn:hover {
-    background-color: #dc2626;
+    /* This class is no longer used for the button */
+}
+
+.users-section {
+    margin-bottom: 2rem;
+}
+
+.users-section h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--primary-color);
+    display: inline-block;
 }
 
 /* TestFlight talimatları için stiller */
@@ -1514,5 +1572,18 @@ main {
         width: 100%;
         padding: 10px 16px;
         justify-content: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .user-item-header, .user-item-content {
+        padding: 0.75rem 1rem;
+    }
+    .user-actions {
+        padding-top: 0.75rem;
+    }
+    .approve-btn, .revoke-btn {
+        flex: 1;
+        text-align: center;
     }
 } 

@@ -49,8 +49,16 @@ app.use((req, res, next) => {
 
 // Authentication middleware
 const isAuthenticated = (req, res, next) => {
-    if (!req.session.username) {
+    if (!req.session.isAuthenticated) {
         return res.status(401).json({ success: false, error: 'User not authenticated' });
+    }
+    next();
+};
+
+// Authorization middleware
+const isAdmin = (req, res, next) => {
+    if (!req.session.isAuthenticated || req.session.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Admin access required' });
     }
     next();
 };
@@ -85,35 +93,44 @@ const upload = multer({
     }
 });
 
-app.post('/api/projects', async (req, res) => {
+// Helper function to read JSON data files safely
+function readJsonFile(filePath) {
     try {
-        if (!req.session.username) {
-            return res.status(401).json({ success: false, error: 'User not authenticated' });
+        if (fs.existsSync(filePath)) {
+            const fileContent = fs.readFileSync(filePath, 'utf8');
+            // Handle potentially empty files
+            return fileContent.trim() ? JSON.parse(fileContent) : {}; 
         }
-        
-        if (req.session.role !== 'admin') {
-            return res.status(403).json({ success: false, error: 'Only admin users can create projects' });
-        }
+    } catch (error) {
+        console.error(`Error reading JSON file ${filePath}:`, error);
+    }
+    // Return default structure if file doesn't exist or is invalid
+    if (filePath.includes('projects.json')) return { projects: [] };
+    if (filePath.includes('users.json')) return { users: [] };
+    return {};
+}
 
+// Helper function to write JSON data files safely
+function writeJsonFile(filePath, data) {
+    try {
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), { mode: 0o666 });
+    } catch (error) {
+        console.error(`Error writing JSON file ${filePath}:`, error);
+        // Optionally, re-throw or handle the error appropriately
+        throw error; 
+    }
+}
+
+app.post('/api/projects', isAdmin, async (req, res) => {
+    try {
         const { name } = req.body;
         if (!name) {
             return res.status(400).json({ success: false, error: 'Project name is required' });
         }
 
         const projectsFile = path.join(__dirname, 'data', 'projects.json');
-        let data = { projects: [] };
+        let data = readJsonFile(projectsFile);
         
-        try {
-            if (fs.existsSync(projectsFile)) {
-                const fileContent = fs.readFileSync(projectsFile, 'utf8');
-                if (fileContent.trim()) {
-                    data = JSON.parse(fileContent);
-                }
-            }
-        } catch (error) {
-            console.error('Error reading projects file:', error);
-        }
-
         const newProject = {
             id: Date.now().toString(),
             name,
@@ -147,7 +164,7 @@ app.post('/api/projects', async (req, res) => {
             data.projects.push(newProject);
 
             // Update projects.json file
-            fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2), { mode: 0o666 });
+            writeJsonFile(projectsFile, data);
 
             res.status(201).json({ success: true, project: newProject });
         } catch (error) {
@@ -166,19 +183,11 @@ app.post('/api/projects', async (req, res) => {
     }
 });
 
-app.delete('/api/projects/:projectId', async (req, res) => {
+app.delete('/api/projects/:projectId', isAdmin, async (req, res) => {
     try {
-        if (!req.session.username) {
-            return res.status(401).json({ success: false, error: 'User not authenticated' });
-        }
-        
-        if (req.session.role !== 'admin') {
-            return res.status(403).json({ success: false, error: 'Only admin users can delete projects' });
-        }
-        
         const { projectId } = req.params;
-        const projectsFile = './data/projects.json';
-        let data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+        const projectsFile = path.join(__dirname, 'data', 'projects.json');
+        let data = readJsonFile(projectsFile);
         const projectIndex = data.projects.findIndex(p => p.id === projectId);
         
         if (projectIndex === -1) {
@@ -192,7 +201,7 @@ app.delete('/api/projects/:projectId', async (req, res) => {
         }
         
         data.projects.splice(projectIndex, 1);
-        fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
+        writeJsonFile(projectsFile, data);
         res.json({ success: true, message: 'Project deleted successfully' });
     } catch (error) {
         console.error('Delete error:', error);
@@ -200,7 +209,7 @@ app.delete('/api/projects/:projectId', async (req, res) => {
     }
 });
 
-app.post('/api/upload', upload.single('file'), (req, res) => {
+app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
     // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -208,18 +217,6 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
-        if (!req.session.username) {
-            res.write(`data: ${JSON.stringify({ success: false, error: 'User not authenticated' })}\n\n`);
-            res.end();
-            return;
-        }
-        
-        if (req.session.role !== 'admin') {
-            res.write(`data: ${JSON.stringify({ success: false, error: 'Only admin users can upload files' })}\n\n`);
-            res.end();
-            return;
-        }
-        
         const { projectId, platform, version, notes, environment, url } = req.body;
         
         if (!projectId || !platform || !version || !environment) {
@@ -243,7 +240,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
         }
 
         const projectsFile = path.join(__dirname, 'data', 'projects.json');
-        let data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+        let data = readJsonFile(projectsFile);
         const project = data.projects.find(p => p.id === projectId);
         
         if (!project) {
@@ -355,7 +352,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
                 project.versions.push(newVersion);
                 project.versions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
                 
-                fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
+                writeJsonFile(projectsFile, data);
                 
                 res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
                 res.end();
@@ -375,7 +372,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
         project.versions.push(newVersion);
         project.versions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
         
-        fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
+        writeJsonFile(projectsFile, data);
         
         res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
         res.end();
@@ -391,30 +388,40 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     }
 });
 
-app.get('/api/projects', async (req, res) => {
+app.get('/api/projects', isAuthenticated, async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const startIndex = (page - 1) * limit;
 
-        const projectsFile = './data/projects.json';
-        if (!fs.existsSync(projectsFile)) {
-            return res.json({ 
-                projects: [],
-                totalPages: 0,
-                currentPage: page
-            });
-        }
+        const projectsFile = path.join(__dirname, 'data', 'projects.json');
+        const usersFile = path.join(__dirname, 'data', 'users.json');
 
-        const data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
-        const projects = data.projects || [];
+        const projectsData = readJsonFile(projectsFile);
+        let allProjects = projectsData.projects || [];
+
+        // Filter projects based on user access if not admin
+        if (req.session.role !== 'admin') {
+            const userData = readJsonFile(usersFile);
+            const currentUser = userData.users.find(u => u.id === req.session.userId);
+            
+            if (currentUser && currentUser.projectIds && Array.isArray(currentUser.projectIds)) {
+                allProjects = allProjects.filter(p => currentUser.projectIds.includes(p.id));
+            } else {
+                allProjects = []; // User has no assigned projects or data is missing
+            }
+        }
         
-        // Sort with most recent uploads at the top
-        projects.sort((a, b) => new Date(b.created) - new Date(a.created));
+        // Sort with most recent uploads/creation at the top
+        // Consider sorting based on latest version upload time if available
+        allProjects.sort((a, b) => {
+             const lastVersionA = a.versions?.length ? new Date(Math.max(...a.versions.map(v => new Date(v.uploadedAt)))) : new Date(a.created);
+             const lastVersionB = b.versions?.length ? new Date(Math.max(...b.versions.map(v => new Date(v.uploadedAt)))) : new Date(b.created);
+             return lastVersionB - lastVersionA;
+        });
         
-        // Sort with most recent uploads at the top
-        const paginatedProjects = projects.slice(startIndex, startIndex + limit);
-        const totalPages = Math.ceil(projects.length / limit);
+        const paginatedProjects = allProjects.slice(startIndex, startIndex + limit);
+        const totalPages = Math.ceil(allProjects.length / limit);
 
         res.json({
             projects: paginatedProjects,
@@ -423,16 +430,15 @@ app.get('/api/projects', async (req, res) => {
         });
     } catch (error) {
         console.error('Error listing projects:', error);
-        res.status(500).json({ error: 'Failed to load projects' });
+        res.status(500).json({ success: false, error: 'Failed to load projects' });
     }
 });
 
-app.get('/api/download/:projectId/:versionId', (req, res) => {
+app.get('/api/download/:projectId/:versionId', isAuthenticated, async (req, res) => {
     try {
         const { projectId, versionId } = req.params;
-        const projectsFile = './data/projects.json';
-        const fileContent = fs.readFileSync(projectsFile, 'utf8');
-        const data = JSON.parse(fileContent);
+        const projectsFile = path.join(__dirname, 'data', 'projects.json');
+        const data = readJsonFile(projectsFile);
 
         if (!data || !data.projects || !Array.isArray(data.projects)) {
             return res.status(500).json({ error: 'Invalid data structure' });
@@ -519,20 +525,12 @@ app.get('/api/download/:projectId/:versionId', (req, res) => {
     }
 });
 
-app.delete('/api/projects/:projectId/versions/:versionId', async (req, res) => {
+app.delete('/api/projects/:projectId/versions/:versionId', isAdmin, async (req, res) => {
     try {
-        if (!req.session.username) {
-            return res.status(401).json({ success: false, error: 'User not authenticated' });
-        }
-        
-        if (req.session.role !== 'admin') {
-            return res.status(403).json({ success: false, error: 'Only admin users can delete versions' });
-        }
-
         const { projectId, versionId } = req.params;
         const projectsFile = path.join(__dirname, 'data', 'projects.json');
         
-        let data = JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+        let data = readJsonFile(projectsFile);
         const project = data.projects.find(p => p.id === projectId);
         
         if (!project) {
@@ -560,7 +558,7 @@ app.delete('/api/projects/:projectId/versions/:versionId', async (req, res) => {
         project.versions.splice(versionIndex, 1);
         
         // Update the project
-        fs.writeFileSync(projectsFile, JSON.stringify(data, null, 2));
+        writeJsonFile(projectsFile, data);
         
         res.status(200).json({ success: true, message: 'Version deleted successfully' });
     } catch (error) {
@@ -579,7 +577,7 @@ app.post('/login', async (req, res) => {
             return res.status(500).json({ success: false, message: 'User database not found' });
         }
         
-        const userData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        const userData = readJsonFile(usersFile);
         const user = userData.users.find(u => u.username === username && u.password === password);
         
         if (!user) {
@@ -638,7 +636,7 @@ app.post('/api/register', async (req, res) => {
         let userData = { users: [] };
         
         if (fs.existsSync(usersFile)) {
-            userData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+            userData = readJsonFile(usersFile);
         }
         
         // Check if user already exists
@@ -655,6 +653,7 @@ app.post('/api/register', async (req, res) => {
             fullName: fullName || '',
             role: 'user',
             approved: false,
+            projectIds: [],
             created: new Date().toISOString()
         };
         
@@ -662,7 +661,7 @@ app.post('/api/register', async (req, res) => {
         userData.users.push(newUser);
         
         // Save to file
-        fs.writeFileSync(usersFile, JSON.stringify(userData, null, 2));
+        writeJsonFile(usersFile, userData);
         
         res.status(201).json({ 
             success: true, 
@@ -675,23 +674,32 @@ app.post('/api/register', async (req, res) => {
 });
 
 // Admin-only API: Get all users
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', isAdmin, async (req, res) => {
     try {
-        // Check if user is admin
-        if (!req.session.username || req.session.role !== 'admin') {
-            return res.status(403).json({ success: false, error: 'Unauthorized' });
-        }
-        
         // Read users file
         const usersFile = path.join(__dirname, 'data', 'users.json');
-        if (!fs.existsSync(usersFile)) {
-            return res.status(200).json({ users: [] });
-        }
+        const projectsFile = path.join(__dirname, 'data', 'projects.json');
+
+        const userData = readJsonFile(usersFile);
+        const projectsData = readJsonFile(projectsFile);
+        const allProjects = projectsData.projects || [];
         
-        const userData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-        
-        // Remove passwords before sending
-        const safeUsers = userData.users.map(({ password, ...user }) => user);
+        // Create a map for quick project lookup
+        const projectMap = new Map(allProjects.map(p => [p.id, p.name]));
+
+        // Prepare safe user list, removing passwords and resolving project names
+        const safeUsers = userData.users.map(({ password, ...user }) => {
+             // Resolve project IDs to names
+             const assignedProjects = (user.projectIds || [])
+                .map(id => ({ id, name: projectMap.get(id) || 'Unknown Project' }))
+                .filter(p => p.name !== 'Unknown Project'); // Optionally filter out projects that no longer exist
+
+            return {
+                ...user,
+                projects: assignedProjects, // Add resolved projects array
+                projectIds: user.projectIds || [] // Ensure projectIds always exists
+            };
+        });
         
         res.json({ users: safeUsers });
     } catch (error) {
@@ -701,13 +709,8 @@ app.get('/api/users', async (req, res) => {
 });
 
 // Admin-only API: Approve or reject user
-app.put('/api/users/:userId/approval', async (req, res) => {
+app.put('/api/users/:userId/approval', isAdmin, async (req, res) => {
     try {
-        // Check if user is admin
-        if (!req.session.username || req.session.role !== 'admin') {
-            return res.status(403).json({ success: false, error: 'Unauthorized' });
-        }
-        
         const { userId } = req.params;
         const { approved } = req.body;
         
@@ -717,7 +720,7 @@ app.put('/api/users/:userId/approval', async (req, res) => {
         
         // Read users file
         const usersFile = path.join(__dirname, 'data', 'users.json');
-        const userData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        const userData = readJsonFile(usersFile);
         
         // Find user
         const userIndex = userData.users.findIndex(u => u.id === userId);
@@ -734,7 +737,7 @@ app.put('/api/users/:userId/approval', async (req, res) => {
         userData.users[userIndex].approved = approved;
         
         // Save to file
-        fs.writeFileSync(usersFile, JSON.stringify(userData, null, 2));
+        writeJsonFile(usersFile, userData);
         
         res.json({ 
             success: true, 
@@ -747,7 +750,7 @@ app.put('/api/users/:userId/approval', async (req, res) => {
 });
 
 // Admin-only API: Change user role to admin
-app.put('/api/users/:userId/role', async (req, res) => {
+app.put('/api/users/:userId/role', isAdmin, async (req, res) => {
     try {
         // Check if user is admin
         if (!req.session.username || req.session.role !== 'admin') {
@@ -793,7 +796,7 @@ app.put('/api/users/:userId/role', async (req, res) => {
 });
 
 // Admin-only API: Delete user
-app.delete('/api/users/:userId', async (req, res) => {
+app.delete('/api/users/:userId', isAdmin, async (req, res) => {
     try {
         // Check if user is admin
         if (!req.session.username || req.session.role !== 'admin') {
@@ -872,7 +875,7 @@ app.get('/api/check-session', (req, res) => {
 });
 
 // Version update endpoint
-app.put('/api/projects/:projectId/versions/:versionId', isAuthenticated, async (req, res) => {
+app.put('/api/projects/:projectId/versions/:versionId', isAdmin, async (req, res) => {
     try {
         if (req.session.role !== 'admin') {
             return res.status(403).json({ success: false, error: 'Admin access required' });
@@ -969,14 +972,6 @@ const API_KEYS_FILE = path.join(__dirname, 'data', 'api_keys.json');
 if (!fs.existsSync(API_KEYS_FILE)) {
     fs.writeFileSync(API_KEYS_FILE, JSON.stringify([], null, 2));
 }
-
-// Middleware to check if user is admin
-const isAdmin = (req, res, next) => {
-    if (!req.session.username || req.session.role !== 'admin') {
-        return res.status(403).json({ error: 'Admin access required' });
-    }
-    next();
-};
 
 // Middleware to validate API key
 const apiKeyMiddleware = async (req, res, next) => {
@@ -1158,4 +1153,61 @@ app.post('/api/external/upload', apiKeyMiddleware, upload.single('file'), async 
 app.listen(config.server.port, () => {
     console.log(`Server running on ${config.urls.base()}`);
     console.log(`Local IP address: ${config.server.host}`);
+});
+
+// Get a list of all project IDs and names (for admin UI)
+app.get('/api/all-projects', isAdmin, async (req, res) => {
+    try {
+        const projectsFile = path.join(__dirname, 'data', 'projects.json');
+        const projectsData = readJsonFile(projectsFile);
+        const projectList = (projectsData.projects || []).map(p => ({ id: p.id, name: p.name }));
+        
+        res.json({ success: true, projects: projectList });
+    } catch (error) {
+        console.error('Error fetching all projects list:', error);
+        res.status(500).json({ success: false, error: 'Failed to load project list' });
+    }
+});
+
+// Admin-only API: Update user's project access
+app.put('/api/users/:userId/projects', isAdmin, async (req, res) => { 
+    try {
+        const { userId } = req.params;
+        const { projectIds } = req.body;
+
+        if (!Array.isArray(projectIds)) {
+            return res.status(400).json({ success: false, error: 'Invalid input: projectIds must be an array.' });
+        }
+        
+        // Optional: You could add validation here to check if projectIds actually exist
+        // in projects.json, but skipping for brevity.
+
+        const usersFile = path.join(__dirname, 'data', 'users.json');
+        const userData = readJsonFile(usersFile);
+        
+        const userIndex = userData.users.findIndex(u => u.id === userId);
+        if (userIndex === -1) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        // Prevent modifying admin project access (admins see all by default)
+        if (userData.users[userIndex].role === 'admin') {
+             return res.status(400).json({ success: false, error: 'Cannot modify project access for admin users.' });
+        }
+        
+        // Update user's project IDs
+        // Ensure projectIds field exists even if it was missing before
+        userData.users[userIndex].projectIds = projectIds;
+        
+        // Save to file
+        writeJsonFile(usersFile, userData);
+        
+        res.json({ 
+            success: true, 
+            message: 'User project access updated successfully' 
+        });
+    } catch (error) {
+        console.error('User project update error:', error);
+        res.status(500).json({ success: false, error: 'Failed to update user project access' });
+    }
 });

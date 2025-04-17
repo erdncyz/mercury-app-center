@@ -501,11 +501,31 @@
         </main>
     </div>
 
+    <!-- Manage Projects Modal -->
+    <div id="manageProjectsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeManageProjectsModal()"></div>
+            <h2 id="manageProjectsTitle">Manage Projects</h2>
+            <div id="projectSelectionList" class="project-selection-container">
+                <!-- Project checkboxes will be loaded here -->
+                <p>Loading projects...</p>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="cancel-btn" onclick="closeManageProjectsModal()">Cancel</button>
+                <button type="button" class="create-btn" onclick="saveUserProjects()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notification-container" aria-live="assertive" aria-atomic="true"></div>
+
     <script>
         const CONFIG = {
             baseUrl: `http://${location.hostname}:${location.port || 80}`
         };
 
+        let currentEditingUserId = null; // Moved declaration here
         let currentPage = 1;
         const itemsPerPage = 10;
         let allVersions = [];
@@ -1838,6 +1858,22 @@
                 
                 if (data.users.length === 0) {
                     usersList.innerHTML = '<p class="empty-state">No users found</p>';
+                } else {
+                    // After users are loaded, display their projects
+                    data.users.forEach(user => {
+                        if (user.approved && user.role !== 'admin') {
+                            const projectListSpan = document.querySelector(`.user-projects[data-userid="${user.id}"] .project-list`);
+                            if (projectListSpan) {
+                                // Use the resolved 'projects' array from the API response
+                                const projectNames = user.projects && user.projects.length > 0 
+                                    ? user.projects.map(p => p.name).join(', ') 
+                                    : 'No projects assigned';
+                                projectListSpan.textContent = projectNames;
+                            }
+                        }
+                    });
+                    // Store fetched users data globally for modal use (consider a more robust state management for larger apps)
+                    window.allUsersData = data.users; 
                 }
             } catch (error) {
                 console.error('Load users error:', error);
@@ -1850,30 +1886,52 @@
             const userItem = document.createElement('div');
             userItem.className = 'user-item';
             userItem.dataset.userId = user.id;
-            
-            // Create user info
-            const userInfo = document.createElement('div');
-            userInfo.className = 'user-info';
-            userInfo.innerHTML = `
-                <div class="user-name">${user.fullName || user.username}</div>
-                <div class="user-details">
-                    <div class="user-username">Username: ${user.username}</div>
-                    ${user.email ? `<div class="user-email">Email: ${user.email}</div>` : ''}
-                    <div class="user-role">Role: ${user.role}</div>
-                    <div class="user-status">Status: ${user.approved ? 'Approved' : 'Pending'}</div>
-                    <div class="user-created">Registered: ${new Date(user.created).toLocaleDateString()}</div>
+            // Add onclick for toggling
+            userItem.onclick = (event) => {
+                 // Prevent toggle if clicking on button/action area
+                 if (event.target.closest('.user-actions') || event.target.closest('.user-delete-icon')) {
+                    return;
+                 }
+                 toggleUserItem(userItem);
+            };
+
+            const currentUsername = localStorage.getItem('username');
+            const isCurrentUser = user.username === currentUsername;
+
+            // Create Header
+            const header = document.createElement('div');
+            header.className = 'user-item-header';
+            header.innerHTML = `
+                <div class="user-name">${user.fullName || user.username} ${isCurrentUser ? '<span class="current-user-indicator">(Current User)</span>' : ''}</div>
+                <div class="user-item-toggle">▼</div>
+            `;
+
+            // Create Content (Details + Actions)
+            const content = document.createElement('div');
+            content.className = 'user-item-content';
+
+            // User Details
+            const userDetailsDiv = document.createElement('div');
+            userDetailsDiv.className = 'user-details';
+            userDetailsDiv.innerHTML = `
+                <div class="user-username">${user.username}</div> 
+                ${user.email ? `<div class="user-email">${user.email}</div>` : ''}
+                <div class="user-role">${user.role}</div>
+                <div class="user-status">${user.approved ? 'Approved' : 'Pending'}</div>
+                <div class="user-created">${new Date(user.created).toLocaleDateString()}</div>
+                <div class="user-projects" data-userid="${user.id}" style="${user.approved && user.role !== 'admin' ? '' : 'display: none;'}">
+                    <span class="project-list">Loading...</span> 
                 </div>
             `;
-            
-            userItem.appendChild(userInfo);
-            
-            // Create action buttons (don't show for current logged in user)
-            const currentUsername = localStorage.getItem('username');
-            if (user.username !== currentUsername) {
+            content.appendChild(userDetailsDiv);
+
+            // Action Buttons (only if not current user)
+            if (!isCurrentUser) {
                 const userActions = document.createElement('div');
                 userActions.className = 'user-actions';
                 
                 if (!user.approved) {
+                    // Approve/Reject buttons for pending users
                     const approveBtn = document.createElement('button');
                     approveBtn.className = 'approve-btn';
                     approveBtn.textContent = 'Approve';
@@ -1881,55 +1939,71 @@
                     userActions.appendChild(approveBtn);
                     
                     const rejectBtn = document.createElement('button');
-                    rejectBtn.className = 'revoke-btn';
+                    rejectBtn.className = 'revoke-btn'; // Use revoke style for reject
                     rejectBtn.textContent = 'Reject';
                     rejectBtn.onclick = () => updateUserApproval(user.id, false);
                     userActions.appendChild(rejectBtn);
                 } else {
+                    // Actions for approved users
                     const revokeBtn = document.createElement('button');
                     revokeBtn.className = 'revoke-btn';
                     revokeBtn.textContent = 'Revoke Access';
                     revokeBtn.onclick = () => updateUserApproval(user.id, false);
                     userActions.appendChild(revokeBtn);
                     
-                    // Add "Make Admin" button for non-admin users who are approved
                     if (user.role !== 'admin') {
                         const makeAdminBtn = document.createElement('button');
                         makeAdminBtn.className = 'admin-btn';
                         makeAdminBtn.textContent = 'Make Admin';
                         makeAdminBtn.onclick = () => updateUserRole(user.id, 'admin');
                         userActions.appendChild(makeAdminBtn);
+
+                        const manageProjectsBtn = document.createElement('button');
+                        manageProjectsBtn.className = 'manage-projects-btn';
+                        manageProjectsBtn.textContent = 'Manage Projects';
+                        manageProjectsBtn.onclick = (event) => {
+                            event.stopPropagation(); // Prevent user item toggle
+                            console.log(`Manage Projects button clicked for user ID: ${user.id}`);
+                            showManageProjectsModal(user.id);
+                        };
+                        userActions.appendChild(manageProjectsBtn);
                     } else {
-                        // For admin users, add a "Revoke Admin" button
+                        // Action for admin users (Revoke Admin)
                         const revokeAdminBtn = document.createElement('button');
                         revokeAdminBtn.className = 'revoke-admin-btn';
                         revokeAdminBtn.textContent = 'Revoke Admin';
                         revokeAdminBtn.onclick = () => updateUserRole(user.id, 'user');
                         userActions.appendChild(revokeAdminBtn);
                     }
+                    // REMOVED the old delete button from here
                 }
-                
-                // Add delete button for all non-admin users
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'delete-btn';
-                deleteBtn.textContent = 'Delete User';
-                deleteBtn.onclick = () => deleteUser(user.id, user.username);
-                userActions.appendChild(deleteBtn);
-                
-                userItem.appendChild(userActions);
+                content.appendChild(userActions);
             } else {
-                // Add a message for the current user
-                const currentUserMessage = document.createElement('div');
-                currentUserMessage.className = 'current-user-message';
-                currentUserMessage.style.color = '#666';
-                currentUserMessage.style.fontStyle = 'italic';
-                currentUserMessage.textContent = '(Current logged in user)';
-                userItem.appendChild(currentUserMessage);
+                 // Optionally add a placeholder or message if current user has no actions
+                 // const noActionsMsg = document.createElement('div');
+                 // noActionsMsg.className = 'no-actions-message';
+                 // noActionsMsg.textContent = 'No actions available for current user.';
+                 // content.appendChild(noActionsMsg);
             }
+
+            // Append Header and Content to User Item
+            userItem.appendChild(header);
+            userItem.appendChild(content);
             
             return userItem;
         }
-        
+
+        // Function to toggle user item visibility
+        function toggleUserItem(element) {
+            // Optional: Close other open items first
+            // document.querySelectorAll('.user-item.active').forEach(item => {
+            //     if (item !== element) {
+            //         item.classList.remove('active');
+            //     }
+            // });
+            element.classList.toggle('active');
+        }
+
         // Update user approval status
         async function updateUserApproval(userId, approved) {
             try {
@@ -2497,6 +2571,108 @@
                 }
             }
         }
+
+        // --- Project Management Functions ---
+
+        // let currentEditingUserId = null; // Remove original declaration from here
+
+        // Show the modal to manage projects for a user
+        async function showManageProjectsModal(userId) {
+            currentEditingUserId = userId;
+            const modal = document.getElementById('manageProjectsModal');
+            const projectListDiv = document.getElementById('projectSelectionList');
+            const title = document.getElementById('manageProjectsTitle');
+            
+            // Find user data from the globally stored list
+            const user = window.allUsersData ? window.allUsersData.find(u => u.id === userId) : null;
+            const username = user ? (user.fullName || user.username) : 'User';
+            title.textContent = `Manage Projects for ${username}`;
+            
+            projectListDiv.innerHTML = '<p>Loading projects...</p>';
+            modal.style.display = 'flex';
+
+            try {
+                // Fetch all projects list
+                const allProjectsResponse = await fetch(`${CONFIG.baseUrl}/api/all-projects`, { 
+                    credentials: 'include' 
+                });
+                if (!allProjectsResponse.ok) throw new Error('Failed to fetch projects list');
+                const allProjectsData = await allProjectsResponse.json();
+
+                // Get the current user's assigned project IDs from the stored data
+                const userProjectIds = user ? (user.projectIds || []) : [];
+
+                if (allProjectsData.success && allProjectsData.projects) {
+                    projectListDiv.innerHTML = ''; // Clear loading message
+                    if (allProjectsData.projects.length === 0) {
+                         projectListDiv.innerHTML = '<p>No projects available to assign.</p>';
+                    }
+                    allProjectsData.projects.forEach(project => {
+                        const checkboxDiv = document.createElement('div');
+                        checkboxDiv.className = 'project-checkbox-item';
+                        const checkboxId = `project-${project.id}`;
+                        checkboxDiv.innerHTML = `
+                            <input type="checkbox" id="${checkboxId}" value="${project.id}" 
+                                   ${userProjectIds.includes(project.id) ? 'checked' : ''}>
+                            <label for="${checkboxId}">${project.name}</label>
+                        `;
+                        projectListDiv.appendChild(checkboxDiv);
+                    });
+                } else {
+                    projectListDiv.innerHTML = `<p class="error-message">Failed to load project data: ${allProjectsData.error || 'Unknown error'}</p>`;
+                }
+
+            } catch (error) {
+                console.error('Error loading project data for modal:', error);
+                projectListDiv.innerHTML = `<p class="error-message">Error loading projects: ${error.message}</p>`;
+            }
+        }
+
+        // Close the manage projects modal
+        function closeManageProjectsModal() {
+            const modal = document.getElementById('manageProjectsModal');
+            modal.style.display = 'none';
+            currentEditingUserId = null; // Clear the user ID
+        }
+
+        // Save the selected projects for the user
+        async function saveUserProjects() {
+            if (!currentEditingUserId) return;
+
+            const projectListDiv = document.getElementById('projectSelectionList');
+            const checkboxes = projectListDiv.querySelectorAll('input[type="checkbox"]:checked');
+            const selectedProjectIds = Array.from(checkboxes).map(cb => cb.value);
+
+            // console.log(`Saving projects for user ${currentEditingUserId}:`, selectedProjectIds); // Keep for debugging if needed
+
+            try {
+                // Call the PUT endpoint to save project IDs
+                const response = await fetch(`${CONFIG.baseUrl}/api/users/${currentEditingUserId}/projects`, {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ projectIds: selectedProjectIds })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('User project access updated successfully', 'success');
+                    closeManageProjectsModal();
+                    // Reload user list to show updated project info
+                    loadUsers(); 
+                } else {
+                    showNotification(data.error || 'Failed to update project access', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving user projects:', error);
+                showNotification('Failed to update project access', 'error');
+            }
+        }
+
+        // --- End Project Management Functions ---
     </script>
 </body>
 </html>
