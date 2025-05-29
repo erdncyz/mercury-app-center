@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -7,6 +8,8 @@ const fs = require('fs');
 const session = require('express-session');
 const config = require('./config');
 const { v4: uuidv4 } = require('uuid');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 const app = express();
 
@@ -120,6 +123,17 @@ function writeJsonFile(filePath, data) {
         throw error; 
     }
 }
+
+// Email configuration
+const transporter = nodemailer.createTransport({
+    host: config.emailConfig.host,
+    port: config.emailConfig.port,
+    secure: config.emailConfig.secure,
+    auth: {
+        user: config.emailConfig.auth.user,
+        pass: config.emailConfig.auth.pass
+    }
+});
 
 app.post('/api/projects', isAdmin, async (req, res) => {
     try {
@@ -642,6 +656,10 @@ app.post('/api/register', async (req, res) => {
         // Check if user already exists
         if (userData.users.some(u => u.username === username)) {
             return res.status(400).json({ success: false, error: 'Username already exists' });
+        }
+        // Check if email already exists (ignore empty emails)
+        if (email && userData.users.some(u => u.email && u.email.toLowerCase() === email.toLowerCase())) {
+            return res.status(400).json({ success: false, error: 'Email already exists' });
         }
         
         // Create new user object
@@ -1210,4 +1228,207 @@ app.put('/api/users/:userId/projects', isAdmin, async (req, res) => {
         console.error('User project update error:', error);
         res.status(500).json({ success: false, error: 'Failed to update user project access' });
     }
+});
+
+// Forgot Password Request
+app.post('/api/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        
+        // Read users from file
+        const usersFile = path.join(__dirname, 'data', 'users.json');
+        if (!fs.existsSync(usersFile)) {
+            return res.status(500).json({ success: false, message: 'User database not found.' });
+        }
+        
+        const userData = readJsonFile(usersFile);
+        const user = userData.users.find(u => u.email === email);
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'No account was found registered with this email address.'
+            });
+        }
+        
+        // Generate reset token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetTokenExpiry = Date.now() + 3600000; // 1 hour from now
+        
+        // Update user with reset token
+        user.resetToken = resetToken;
+        user.resetTokenExpiry = resetTokenExpiry;
+        
+        // Save updated user data
+        writeJsonFile(usersFile, userData);
+        
+        // Send reset email
+        const resetUrl = `${config.urls.base()}/reset-password?token=${resetToken}`;
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'Mercury App Center Password Reset Request',
+            html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Mercury App Center Password Reset Request</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #f6f8fa;
+            font-family: Arial, Helvetica, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            max-width: 400px;
+            width: 100%;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            padding: 32px 28px 24px 28px;
+            text-align: center;
+        }
+        .logo {
+            margin-bottom: 18px;
+        }
+        .logo img {
+            width: 72px;
+            height: 72px;
+        }
+        .header {
+            font-size: 22px;
+            color: #222;
+            font-weight: bold;
+            margin-bottom: 18px;
+        }
+        .content {
+            font-size: 15px;
+            color: #444;
+            margin-bottom: 18px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4f46e5;
+            color: #fff !important;
+            text-decoration: none;
+            padding: 13px 36px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            margin: 18px 0 0 0;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #004bbd;
+        }
+        .expire-info {
+            font-size: 14px;
+            color: #555;
+            margin-top: 22px;
+        }
+        .footer {
+            font-size: 13px;
+            color: #aaa;
+            margin-top: 32px;
+        }
+        @media (max-width: 480px) {
+            .container {
+                padding: 18px 7px 16px 7px;
+            }
+            .header { font-size: 18px; }
+            .button { padding: 12px 16px; font-size: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">Password Reset Request</div>
+        <div class="content">
+            You have requested to reset your password.<br>
+            Please click the button below to reset your password.
+        </div>
+        <a href="${resetUrl}" class="button">Reset Password</a>
+        <div class="expire-info">
+            This link will expire in <b>1 hour</b>.<br>
+            If you did not request a password reset, please ignore this email.
+        </div>
+        <div class="footer">
+            &copy; 2025 | Your security is important to us.
+        </div>
+    </div>
+</body>
+</html>
+`
+        };
+        
+        await transporter.sendMail(mailOptions);
+        
+        res.json({
+            success: true,
+            message: 'Password reset instructions sent to your email'
+        });
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ success: false, message: 'Failed to process password reset request' });
+    }
+});
+
+// Reset Password
+app.post('/api/reset-password', async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+        
+        // Read users from file
+        const usersFile = path.join(__dirname, 'data', 'users.json');
+        if (!fs.existsSync(usersFile)) {
+            return res.status(500).json({ success: false, message: 'User database not found' });
+        }
+        
+        const userData = readJsonFile(usersFile);
+        const user = userData.users.find(u => 
+            u.resetToken === token && 
+            u.resetTokenExpiry > Date.now()
+        );
+        
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or expired reset token'
+            });
+        }
+        
+        // Update password and clear reset token
+        user.password = newPassword;
+        user.resetToken = undefined;
+        user.resetTokenExpiry = undefined;
+        
+        // Save updated user data
+        writeJsonFile(usersFile, userData);
+        
+        res.json({
+            success: true,
+            message: 'Password has been reset successfully'
+        });
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ success: false, message: 'Failed to reset password' });
+    }
+});
+
+app.get('/reset-password', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'reset-password.html'));
+});
+
+app.get('/forgot-password', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'forgot-password.html'));
 });

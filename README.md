@@ -56,6 +56,20 @@ Mercury App Center is a centralized platform for managing and distributing your 
 - Version history
 - Platform-specific button controls
 
+### Onvo TV Platform Support
+
+- **Onvo TV** platformu artık Mercury App Center'da tam desteklenmektedir.
+    - Upload ekranında platform olarak **Onvo TV** seçebilirsiniz.
+    - Yüklediğiniz Onvo TV uygulama versiyonları ana ekranda ayrı bir kutuda listelenir.
+    - Onvo TV için APK dosyası yükleyebilir, indirebilir ve silebilirsiniz.
+    - Diğer platformlarda olduğu gibi, versiyon notları ve ortam (environment) bilgisi ekleyebilirsiniz.
+
+#### Kullanım
+1. "Upload New Version" butonuna tıklayın.
+2. Platform olarak **Onvo TV** seçin.
+3. APK dosyanızı yükleyin ve gerekli bilgileri doldurun.
+4. Yükledikten sonra, ana ekranda Onvo TV başlığı altında versiyonunuzu görebilirsiniz.
+
 ## API Integration
 
 ### Creating an API Key
@@ -141,7 +155,7 @@ pipeline {
     
     stages {
         stage('Upload to Mercury') {
-            steps {
+            steps:
                 // Android example
                 sh '''
                     curl -X POST "${MERCURY_URL}/api/external/upload" \\
@@ -411,6 +425,7 @@ mercury-app-center/
 - **TV Applications**
   - Apple TV: TestFlight URLs
   - Android TV: APK files
+  - Onvo TV: APK files
 
 ## Requirements
 
@@ -463,3 +478,39 @@ For support, please create an issue in the repository.
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Email Sending & Password Reset
+
+Mercury App Center supports password reset via email. When a user requests a password reset, an email with a reset link is sent to the user's registered email address.
+
+### How It Works
+- Users can request a password reset from the login screen.
+- The system sends a reset link to the user's email (using SMTP).
+- The user can set a new password using the link.
+
+### Configuration
+1. **.env File Setup**
+
+Create a `.env` file in your project root with the following content:
+
+```
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASSWORD=your-app-password
+```
+
+- `EMAIL_USER`: The Gmail address that will send emails.
+- `EMAIL_PASSWORD`: The [App Password](https://support.google.com/accounts/answer/185833?hl=en) generated from your Google Account (not your normal Gmail password!).
+
+2. **Enable 2-Step Verification & App Passwords on Gmail**
+   - Go to your [Google Account Security Settings](https://myaccount.google.com/security).
+   - Enable 2-Step Verification.
+   - After enabling, go to "App Passwords" and generate a password for "Mail".
+   - Use this app password in your `.env` file.
+
+3. **Restart the Server**
+   - After updating `.env`, restart your Node.js server for changes to take effect.
+
+### Notes
+- The email feature uses Gmail SMTP by default. You can change SMTP settings in `config.js` if you use another provider.
+- Make sure less secure app access is enabled if using a non-Google SMTP provider.
+- All password reset links are time-limited and secure.

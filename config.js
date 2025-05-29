@@ -44,6 +44,15 @@ const config = {
             '127.0.0.1',
             '192.168.1.107'
         ]
+    },
+    emailConfig: {
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASSWORD
+        }
     }
 };
 

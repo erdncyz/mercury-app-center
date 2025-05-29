@@ -319,6 +319,22 @@
                 <input type="text" id="username" placeholder="Username" required>
                 <input type="password" id="password" placeholder="Password" required>
                 <button type="submit">Login</button>
+                <div class="forgot-password-link">
+                    <a href="#" onclick="showForgotPasswordForm()">Forgot Password?</a>
+                </div>
+            </form>
+            <form id="forgotPasswordForm" style="display: none;" onsubmit="handleForgotPassword(event)">
+                <input type="email" id="forgotPasswordEmail" placeholder="Enter your email" required>
+                <button type="submit">Send Reset Link</button>
+                <div id="forgotPasswordError" class="login-error"></div>
+                <div class="back-to-login">
+                    <a href="#" onclick="showLoginForm()">Back to Login</a>
+                </div>
+            </form>
+            <form id="resetPasswordForm" style="display: none;" onsubmit="handleResetPassword(event)">
+                <input type="password" id="newPassword" placeholder="New Password" required>
+                <input type="password" id="confirmPassword" placeholder="Confirm Password" required>
+                <button type="submit">Reset Password</button>
             </form>
             <form id="registerForm" style="display: none;" onsubmit="handleRegister(event)">
                 <input type="text" id="registerUsername" placeholder="Username" required>
@@ -326,6 +342,7 @@
                 <input type="email" id="registerEmail" placeholder="Email">
                 <input type="text" id="registerFullName" placeholder="Full Name">
                 <button type="submit">Register</button>
+                <div id="registerError" class="login-error"></div>
             </form>
         </div>
         <div class="background-icons"></div>
@@ -398,6 +415,7 @@
                                 <option value="tvos">Apple TV</option>
                                 <option value="androidtv">Android TV</option>
                                 <option value="huawei">Huawei</option>
+                                <option value="onvotv">Onvo TV</option>
                             </select>
                         </div>
                         
@@ -684,10 +702,11 @@
         }
 
         function removeLoginError() {
-            const existingError = document.querySelector('.login-error');
-            if (existingError) {
-                existingError.remove();
-            }
+            // Sadece login formundaki login-error'u sil
+            const loginForm = document.getElementById('loginForm');
+            if (!loginForm) return;
+            const loginError = loginForm.querySelector('.login-error');
+            if (loginError) loginError.remove();
         }
 
         async function handleLogout() {
@@ -830,7 +849,8 @@
                         android: uniqueVersions.filter(v => v.platform === 'android'),
                         tvos: uniqueVersions.filter(v => v.platform === 'tvos'),
                         androidtv: uniqueVersions.filter(v => v.platform === 'androidtv'),
-                        huawei: uniqueVersions.filter(v => v.platform === 'huawei')
+                        huawei: uniqueVersions.filter(v => v.platform === 'huawei'),
+                        onvotv: uniqueVersions.filter(v => v.platform === 'onvotv')
                     };
                     
                     card.innerHTML = `
@@ -1099,7 +1119,52 @@
                                     `).join('')}
                                 </div>
                             ` : ''}
-                            ${(!platforms.ios.length && !platforms.android.length && !platforms.tvos.length && !platforms.androidtv.length && !platforms.huawei.length) ? `
+                            ${platforms.onvotv.length > 0 ? `
+                                <div class="platform-item">
+                                    <div class="platform-header">
+                                        <span>📺 Onvo TV</span>
+                                    </div>
+                                    ${platforms.onvotv.map(version => `
+                                        <div class="version-item" onclick="toggleVersion(event, this)">
+                                            <div class="version-header">
+                                                <div class="version-title">
+                                                    <span class="version-number">v${version.version || 'N/A'}</span>
+                                                    <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
+                                                </div>
+                                                <div class="version-toggle">▼</div>
+                                            </div>
+                                            <div class="version-content">
+                                                <div class="version-info">
+                                                    <div class="version-uploader">Uploaded by: ${version.uploadedBy || 'Unknown'}</div>
+                                                    <div class="version-environment-info">
+                                                        <span class="environment-label">Environment:</span>
+                                                        <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
+                                                    </div>
+                                                    <div class="version-notes">${version.notes || 'No notes'}</div>
+                                                </div>
+                                                <div class="version-actions">
+                                                    <div class="modern-buttons-container">
+                                                        <button class="modern-button download-button" ontouchstart="" onclick="event.stopPropagation(); downloadVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                                            </svg>
+                                                            Download
+                                                        </button>
+                                                        <button class="modern-button delete-button" onclick="event.stopPropagation(); deleteVersion('${project.id}', '${version.id}')">
+                                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                            </svg>
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                            ${(!platforms.ios.length && !platforms.android.length && !platforms.tvos.length && !platforms.androidtv.length && !platforms.huawei.length && !platforms.onvotv.length) ? `
                                 <div class="empty-platform-message">
                                     <p>No versions uploaded yet</p>
                                 </div>
@@ -1716,7 +1781,8 @@
                 android: project.versions?.filter(v => v.platform === 'android').slice(0, 5) || [],
                 tvos: project.versions?.filter(v => v.platform === 'tvos').slice(0, 5) || [],
                 androidtv: project.versions?.filter(v => v.platform === 'androidtv').slice(0, 5) || [],
-                huawei: project.versions?.filter(v => v.platform === 'huawei').slice(0, 5) || []
+                huawei: project.versions?.filter(v => v.platform === 'huawei').slice(0, 5) || [],
+                onvotv: project.versions?.filter(v => v.platform === 'onvotv').slice(0, 5) || []
             };
 
             // Show only the last 5 versions for each platform
@@ -1743,13 +1809,15 @@
         // Handle user registration
         async function handleRegister(event) {
             event.preventDefault();
+            const errorDiv = document.getElementById('registerError');
+            if (!errorDiv) return; // Eğer div yoksa fonksiyonu bitir
+            errorDiv.innerText = '';
+            errorDiv.style.display = 'none';
             removeLoginError();
-            
             const username = document.getElementById('registerUsername').value;
             const password = document.getElementById('registerPassword').value;
             const email = document.getElementById('registerEmail').value;
             const fullName = document.getElementById('registerFullName').value;
-            
             try {
                 const response = await fetch(`${CONFIG.baseUrl}/api/register`, {
                     method: 'POST',
@@ -1758,18 +1826,31 @@
                     },
                     body: JSON.stringify({ username, password, email, fullName })
                 });
-                
                 const data = await response.json();
                 if (data.success) {
-                    showNotification('Registration successful. Your account is pending approval by an administrator.', 'success');
-                    // Switch back to login form
-                    document.querySelector('.auth-toggle-btn[data-target="loginForm"]').click();
+                    errorDiv.style.color = '#15803d';
+                    errorDiv.innerText = 'Registration successful. Your account is pending approval by an administrator.';
+                    errorDiv.style.display = 'block';
+                    setTimeout(() => {
+                        document.querySelector('.auth-toggle-btn[data-target="loginForm"]').click();
+                    }, 2000);
                 } else {
-                    showLoginError(data.error || 'Registration failed');
+                    errorDiv.style.color = '#b91c1c';
+                    errorDiv.innerText = data.error || 'Registration failed';
+                    errorDiv.style.display = 'block';
+                    errorDiv.style.border = '1px solid #b91c1c';
+                    errorDiv.style.padding = '8px';
+                    errorDiv.style.marginTop = '10px';
+                    errorDiv.style.borderRadius = '4px';
                 }
             } catch (error) {
-                console.error('Registration error:', error);
-                showLoginError('Registration failed. Please try again.');
+                errorDiv.style.color = '#b91c1c';
+                errorDiv.innerText = 'Registration failed. Please try again.';
+                errorDiv.style.display = 'block';
+                errorDiv.style.border = '1px solid #b91c1c';
+                errorDiv.style.padding = '8px';
+                errorDiv.style.marginTop = '10px';
+                errorDiv.style.borderRadius = '4px';
             }
         }
         
@@ -2345,7 +2426,8 @@
                                      '<option value="android">Android</option>' +
                                      '<option value="tvos">Apple TV</option>' +
                                      '<option value="androidtv">Android TV</option>' +
-                                     '<option value="huawei">Huawei</option>';
+                                     '<option value="huawei">Huawei</option>' +
+                                     '<option value="onvotv">Onvo TV</option>';
             
             // Hide all fields
             hideAllUploadFields();
@@ -2357,8 +2439,33 @@
         // Edit version function
         function editVersion(projectId, versionId) {
             event.stopPropagation(); // Prevent version toggle
-            
-            // ... existing code ...
+            fetch(`${CONFIG.baseUrl}/api/projects/${projectId}/versions/${versionId}`, {
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.version) {
+                    const version = data.version;
+                    // Open edit modal
+                    const modal = document.getElementById('editVersionModal') || createEditVersionModal();
+                    // Fill form fields
+                    document.getElementById('editVersionId').value = version.id;
+                    document.getElementById('editProjectId').value = projectId;
+                    document.getElementById('editVersionNumber').value = version.version || '';
+                    document.getElementById('editEnvironment').value = version.environment || 'production';
+                    document.getElementById('editNotes').value = version.notes || '';
+                    document.getElementById('editUrl').value = version.url || '';
+                    document.getElementById('editPlatform').value = version.platform || '';
+                    // Show modal
+                    modal.style.display = 'flex';
+                } else {
+                    showNotification('Version information could not be retrieved', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Version edit error:', error);
+                showNotification('Version editing error', 'error');
+            });
         }
 
         function showTab(tabName) {
@@ -2673,6 +2780,119 @@
         }
 
         // --- End Project Management Functions ---
+
+        function showForgotPasswordForm() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'none';
+            document.getElementById('forgotPasswordForm').style.display = 'block';
+            document.getElementById('resetPasswordForm').style.display = 'none';
+            
+            // Update active states
+            document.querySelectorAll('.auth-toggle-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+        }
+
+        function showLoginForm() {
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('registerForm').style.display = 'none';
+            document.getElementById('forgotPasswordForm').style.display = 'none';
+            document.getElementById('resetPasswordForm').style.display = 'none';
+            document.getElementById('registerError').innerText = '';
+            document.getElementById('registerError').style.display = 'none';
+            // Update active states
+            document.querySelector('.auth-toggle-btn[data-target="loginForm"]').classList.add('active');
+        }
+
+        function showRegisterForm() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'block';
+            document.getElementById('forgotPasswordForm').style.display = 'none';
+            document.getElementById('resetPasswordForm').style.display = 'none';
+            document.getElementById('registerError').innerText = '';
+            document.getElementById('registerError').style.display = 'none';
+            // Update active states
+            document.querySelectorAll('.auth-toggle-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector('.auth-toggle-btn[data-target="registerForm"]').classList.add('active');
+        }
+
+        async function handleForgotPassword(event) {
+            event.preventDefault();
+            document.getElementById('forgotPasswordError').innerText = '';
+            const email = document.getElementById('forgotPasswordEmail').value;
+            try {
+                const response = await fetch(`${CONFIG.baseUrl}/api/forgot-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('forgotPasswordError').style.color = '#15803d';
+                    document.getElementById('forgotPasswordError').innerText = 'Password reset instructions sent to your email';
+                    setTimeout(showLoginForm, 2000);
+                } else {
+                    document.getElementById('forgotPasswordError').style.color = '#b91c1c';
+                    document.getElementById('forgotPasswordError').innerText = data.message || 'Failed to process password reset request';
+                }
+            } catch (error) {
+                document.getElementById('forgotPasswordError').style.color = '#b91c1c';
+                document.getElementById('forgotPasswordError').innerText = 'Failed to process password reset request';
+            }
+        }
+
+        async function handleResetPassword(event) {
+            event.preventDefault();
+            removeLoginError();
+            
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            
+            if (newPassword !== confirmPassword) {
+                showLoginError('Passwords do not match');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${CONFIG.baseUrl}/api/reset-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ token, newPassword })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('Password has been reset successfully', 'success');
+                    showLoginForm();
+                } else {
+                    showLoginError(data.message || 'Failed to reset password');
+                }
+            } catch (error) {
+                console.error('Reset password error:', error);
+                showLoginError('Failed to reset password');
+            }
+        }
+
+        // Check for reset token in URL on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            
+            if (token) {
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('registerForm').style.display = 'none';
+                document.getElementById('forgotPasswordForm').style.display = 'none';
+                document.getElementById('resetPasswordForm').style.display = 'block';
+            }
+        });
     </script>
 </body>
 </html>

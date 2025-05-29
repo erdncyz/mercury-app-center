@@ -1586,4 +1586,81 @@ main {
         flex: 1;
         text-align: center;
     }
+}
+
+.forgot-password-link {
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.forgot-password-link a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.forgot-password-link a:hover {
+    text-decoration: underline;
+}
+
+.back-to-login {
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.back-to-login a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.back-to-login a:hover {
+    text-decoration: underline;
+}
+
+#forgotPasswordForm,
+#resetPasswordForm {
+    width: 100%;
+}
+
+#forgotPasswordForm input,
+#resetPasswordForm input {
+    width: 100%;
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    font-size: 1rem;
+    box-sizing: border-box;
+    background-color: #f8fafc;
+}
+
+#forgotPasswordForm button,
+#resetPasswordForm button {
+    width: 100%;
+    padding: 1rem;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 0.75rem;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 0.5rem;
+}
+
+#forgotPasswordForm button:hover,
+#resetPasswordForm button:hover {
+    background-color: var(--hover-color);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+}
+
+#forgotPasswordError:empty {
+    display: none;
+}
+
+#registerError:empty {
+    display: none;
 } 
