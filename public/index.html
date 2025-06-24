@@ -316,7 +316,7 @@
                 <button class="auth-toggle-btn" data-target="registerForm">Register</button>
             </div>
             <form id="loginForm" onsubmit="handleLogin(event)">
-                <input type="text" id="username" placeholder="Username" required>
+                <input type="text" id="usernameOrEmail" placeholder="Username or Email" required>
                 <input type="password" id="password" placeholder="Password" required>
                 <button type="submit">Login</button>
                 <div class="forgot-password-link">
@@ -639,7 +639,7 @@
             event.preventDefault();
             removeLoginError();
             
-            const username = document.getElementById('username').value;
+            const username = document.getElementById('usernameOrEmail').value;
             const password = document.getElementById('password').value;
 
             try {

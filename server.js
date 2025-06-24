@@ -592,12 +592,23 @@ app.post('/login', async (req, res) => {
         }
         
         const userData = readJsonFile(usersFile);
-        const user = userData.users.find(u => u.username === username && u.password === password);
+        
+        // Check if input is email or username
+        const isEmail = username.includes('@');
+        let user;
+        
+        if (isEmail) {
+            // Login with email
+            user = userData.users.find(u => u.email && u.email.toLowerCase() === username.toLowerCase() && u.password === password);
+        } else {
+            // Login with username
+            user = userData.users.find(u => u.username === username && u.password === password);
+        }
         
         if (!user) {
             return res.status(401).json({
                 success: false,
-                message: 'Invalid username or password'
+                message: 'Invalid username/email or password'
             });
         }
         
