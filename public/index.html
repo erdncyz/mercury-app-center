@@ -611,6 +611,7 @@
             }
             
             await checkLoginStatus();
+            setupModalBackgroundClose();
         });
         
         // Update enhanceTouchExperience on resize
@@ -2893,6 +2894,17 @@
                 document.getElementById('resetPasswordForm').style.display = 'block';
             }
         });
+
+        // Modal dışına tıklayınca kapatma özelliği
+        function setupModalBackgroundClose() {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('mousedown', function(e) {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+            });
+        }
     </script>
 </body>
 </html>
