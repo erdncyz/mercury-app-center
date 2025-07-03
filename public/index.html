@@ -356,6 +356,7 @@
             </div>
             <div class="header-right">
                 <span id="userDisplay"></span>
+                <button id="darkModeToggle" title="Toggle dark mode" style="margin-right: 0.5rem;">🌙</button>
                 <button id="adminPanelButton" style="display: none;" onclick="showAdminPanel()">Admin Panel</button>
                 <button onclick="handleLogout()">Logout</button>
             </div>
@@ -625,6 +626,27 @@
             
             await checkLoginStatus();
             setupModalBackgroundClose();
+            
+            // Dark mode toggle logic
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            function setTheme(theme) {
+                document.body.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                darkModeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+            }
+            darkModeToggle.onclick = function() {
+                const current = document.body.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                setTheme(current === 'dark' ? 'light' : 'dark');
+            };
+            (function() {
+                const saved = localStorage.getItem('theme');
+                if (saved === 'dark' || (saved !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    setTheme('dark');
+                } else {
+                    setTheme('light');
+                }
+            })();
         });
         
         // Update enhanceTouchExperience on resize
@@ -1288,7 +1310,35 @@
             event.preventDefault();
             
             const form = event.target;
+            const platform = document.getElementById('platformSelect').value;
+
+            // For file uploads, ensure all required fields are present and enabled
+            if (platform !== 'ios' && platform !== 'tvos') {
+                // Set default values if missing
+                const projectIdInput = document.getElementById('projectIdInput');
+                const versionInput = document.getElementById('versionInput');
+                const environmentSelect = document.getElementById('environmentSelect');
+                if (!projectIdInput.value) {
+                    showUploadError('Project is required');
+                    return;
+                }
+                if (!versionInput.value) {
+                    versionInput.value = '1.0.0';
+                }
+                if (!environmentSelect.value) {
+                    environmentSelect.value = 'production';
+                }
+                // Ensure fields are enabled
+                projectIdInput.disabled = false;
+                versionInput.disabled = false;
+                environmentSelect.disabled = false;
+            }
+            
             const formData = new FormData(form);
+            // Ensure platform is always included in FormData for file uploads
+            if (platform !== 'ios' && platform !== 'tvos') {
+                formData.set('platform', platform);
+            }
             const submitButton = form.querySelector('button[type="submit"]');
             
             // Store original button content
@@ -1304,8 +1354,6 @@
                 <span class="progress-text">Starting upload...</span>
             `;
             
-            const platform = document.getElementById('platformSelect').value;
-            
             // iOS ve Apple TV platformları için sadece URL
             if (platform === 'ios' || platform === 'tvos') {
                 const url = document.getElementById('appUrl').value;
@@ -1316,11 +1364,43 @@
                     return;
                 }
                 
-                formData.set('url', url);
-                formData.set('version', 'URL Only');
-                formData.set('environment', 'production');
-                formData.set('notes', '');
-                formData.delete('file');
+                const projectId = document.getElementById('projectIdInput').value;
+                removeUploadError();
+                try {
+                    const response = await fetch(`${CONFIG.baseUrl}/api/submit`, {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            projectId: projectId,
+                            platform: platform,
+                            environment: 'production',
+                            url: url
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        showNotification('URL submitted successfully', 'success');
+                        closeModal('uploadModal');
+                        showAllApps();
+                        submitButton.innerHTML = originalContent;
+                        submitButton.disabled = false;
+                        return;
+                    } else {
+                        showUploadError(data.error || 'Failed to submit URL');
+                        submitButton.innerHTML = originalContent;
+                        submitButton.disabled = false;
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Submit error:', error);
+                    showUploadError('Failed to submit URL');
+                    submitButton.innerHTML = originalContent;
+                    submitButton.disabled = false;
+                    return;
+                }
             } else {
                 const file = document.getElementById('appFile').files[0];
                 if (!file) {
@@ -2341,6 +2421,12 @@
             const notes = document.getElementById('editNotes').value;
             const url = document.getElementById('editUrl').value;
             const platform = document.getElementById('editPlatform').value;
+
+            // If version is 'URL Only', require URL
+            if (version === 'URL Only' && (!url || url.trim() === '')) {
+                showNotification('URL is required for URL Only versions', 'error');
+                return;
+            }
             
             try {
                 const response = await fetch(`${CONFIG.baseUrl}/api/projects/${projectId}/versions/${versionId}`, {
@@ -2438,6 +2524,17 @@
             document.getElementById('projectIdInput').value = projectId;
             document.getElementById('uploadProjectName').textContent = projectName;
             document.getElementById('uploadForm').reset();
+            
+            // Clear file input and file info display
+            const fileInput = document.getElementById('appFile');
+            if (fileInput) fileInput.value = '';
+            const fileInfo = document.getElementById('jiraFileInfo');
+            if (fileInfo) {
+                fileInfo.innerHTML = '';
+                fileInfo.style.display = 'none';
+            }
+            const uploadText = document.getElementById('jiraUploadText');
+            if (uploadText) uploadText.style.display = '';
             
             // Clear platform selection (add empty option)
             const platformSelect = document.getElementById('platformSelect');
@@ -2806,7 +2903,7 @@
             document.getElementById('registerForm').style.display = 'none';
             document.getElementById('forgotPasswordForm').style.display = 'block';
             document.getElementById('resetPasswordForm').style.display = 'none';
-            
+            document.querySelector('.auth-toggle').style.display = 'none';
             // Update active states
             document.querySelectorAll('.auth-toggle-btn').forEach(btn => {
                 btn.classList.remove('active');
@@ -2820,6 +2917,7 @@
             document.getElementById('resetPasswordForm').style.display = 'none';
             document.getElementById('registerError').innerText = '';
             document.getElementById('registerError').style.display = 'none';
+            document.querySelector('.auth-toggle').style.display = '';
             // Update active states
             document.querySelector('.auth-toggle-btn[data-target="loginForm"]').classList.add('active');
         }
@@ -2831,6 +2929,7 @@
             document.getElementById('resetPasswordForm').style.display = 'none';
             document.getElementById('registerError').innerText = '';
             document.getElementById('registerError').style.display = 'none';
+            document.querySelector('.auth-toggle').style.display = '';
             // Update active states
             document.querySelectorAll('.auth-toggle-btn').forEach(btn => {
                 btn.classList.remove('active');

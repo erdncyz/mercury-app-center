@@ -8,12 +8,91 @@
     --hover-color: #4338ca;
 }
 
+:root[data-theme='dark'] {
+    --primary-color: #8b9eff;
+    --secondary-color: #4f46e5;
+    --background-color: #181a1b;
+    --card-background: #23272e;
+    --text-color: #f3f4f6;
+    --border-color: #2c2f36;
+    --hover-color: #6366f1;
+}
+
 body {
     margin: 0;
     padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background-color: var(--background-color);
     color: var(--text-color);
+}
+
+body[data-theme='dark'] {
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+
+body[data-theme='dark'] .app-card,
+body[data-theme='dark'] .modal-content,
+body[data-theme='dark'] .login-box {
+    background: var(--card-background);
+    color: var(--text-color);
+    box-shadow: 0 4px 20px -2px rgba(0,0,0,0.7);
+}
+
+body[data-theme='dark'] input,
+body[data-theme='dark'] select,
+body[data-theme='dark'] textarea {
+    background: #23272e;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme='dark'] .jira-upload-area {
+    background: #23272e;
+    border-color: #2c2f36;
+    color: #bfc8d6;
+}
+body[data-theme='dark'] .jira-upload-area.dragover {
+    border-color: #8b9eff;
+    background: #232e3a;
+}
+body[data-theme='dark'] .jira-file-info {
+    background: #232e3a;
+    color: #f3f4f6;
+}
+body[data-theme='dark'] .jira-remove-btn {
+    color: #ffb4a2;
+}
+body[data-theme='dark'] .jira-remove-btn:hover {
+    background: #3a2323;
+}
+body[data-theme='dark'] .file-info {
+    color: #bfc8d6;
+}
+body[data-theme='dark'] .modal-actions button,
+body[data-theme='dark'] .create-project button,
+body[data-theme='dark'] .header-right button,
+body[data-theme='dark'] .create-btn,
+body[data-theme='dark'] .tab-btn.active {
+    background-color: #4338ca;
+    color: #fff;
+}
+body[data-theme='dark'] .modal-actions button.cancel-btn {
+    background: #23272e;
+    color: #bfc8d6;
+    border: 1px solid var(--border-color);
+}
+
+body[data-theme='dark'] input:-webkit-autofill,
+body[data-theme='dark'] input:-webkit-autofill:focus,
+body[data-theme='dark'] input:-webkit-autofill:hover,
+body[data-theme='dark'] input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #181a1b inset !important;
+    box-shadow: 0 0 0 1000px #181a1b inset !important;
+    -webkit-text-fill-color: #f3f4f6 !important;
+    color: #f3f4f6 !important;
+    border: 1px solid #2c2f36 !important;
+    transition: background-color 5000s ease-in-out 0s;
 }
 
 #loginContainer {
@@ -374,6 +453,16 @@ main {
     color: #6b7280;
 }
 
+body[data-theme='dark'] .empty-state {
+    background-color: #23272e;
+    color: #bfc8d6;
+}
+
+body[data-theme='dark'] .app-card .empty-state {
+    background-color: #23272e !important;
+    color: #bfc8d6 !important;
+}
+
 .app-actions {
     display: flex;
     gap: 0.5rem;
@@ -411,6 +500,17 @@ main {
     background-color: #dc2626;
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+body[data-theme='dark'] .app-actions button:first-child {
+    background-color: #4338ca !important;
+    color: #fff !important;
+    border: none;
+}
+body[data-theme='dark'] .app-actions button:first-child:hover,
+body[data-theme='dark'] .app-actions button:first-child:active {
+    background-color: #3730a3 !important;
+    color: #fff !important;
 }
 
 .notification {
@@ -1740,4 +1840,116 @@ main {
 }
 .jira-remove-btn:hover {
     background: #ffebe6;
+}
+
+body[data-theme='dark'] .modern-button {
+    background-color: #4338ca !important;
+    color: #fff !important;
+    border: none;
+}
+body[data-theme='dark'] .modern-button:hover,
+body[data-theme='dark'] .modern-button:active {
+    background-color: #3730a3 !important;
+    color: #fff !important;
+}
+
+body[data-theme='dark'] .platform-item {
+    background-color: #232e3a;
+    border-color: #232e3a;
+}
+body[data-theme='dark'] .version-item {
+    background-color: #23272e;
+    color: #f3f4f6;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.25);
+}
+body[data-theme='dark'] .app-card {
+    background-color: #23272e;
+}
+body[data-theme='dark'] #mainContainer {
+    background-color: #181a1b;
+}
+
+body[data-theme='dark'] .login-box {
+    background: #23272e;
+    color: #f3f4f6;
+    box-shadow: 0 4px 20px -2px rgba(0,0,0,0.7);
+}
+body[data-theme='dark'] .auth-toggle {
+    background-color: #232e3a;
+}
+body[data-theme='dark'] .auth-toggle-btn {
+    color: #bfc8d6;
+}
+body[data-theme='dark'] .auth-toggle-btn.active {
+    background-color: #181a1b;
+    color: #8b9eff;
+}
+body[data-theme='dark'] #loginForm input,
+body[data-theme='dark'] #registerForm input,
+body[data-theme='dark'] #forgotPasswordForm input,
+body[data-theme='dark'] #resetPasswordForm input {
+    background: #181a1b;
+    color: #f3f4f6;
+    border: 1px solid #2c2f36;
+}
+body[data-theme='dark'] #loginForm button,
+body[data-theme='dark'] #registerForm button,
+body[data-theme='dark'] #forgotPasswordForm button,
+body[data-theme='dark'] #resetPasswordForm button {
+    background-color: #4338ca;
+    color: #fff;
+}
+body[data-theme='dark'] .forgot-password-link a {
+    color: #8b9eff;
+}
+body[data-theme='dark'] .login-error,
+body[data-theme='dark'] .upload-error,
+body[data-theme='dark'] .notification.error,
+body[data-theme='dark'] .confirm-dialog.error {
+    background-color: #2d1a1a !important;
+    color: #ffb4a2 !important;
+    border: 1px solid #ef4444 !important;
+    border-left: 4px solid #ef4444 !important;
+}
+body[data-theme='dark'] .empty-platform-message {
+    background-color: #23272e;
+    color: #bfc8d6;
+}
+
+body[data-theme='dark'] .user-item,
+body[data-theme='dark'] .user-item.active {
+    background-color: #23272e;
+    color: #f3f4f6;
+    border: 1px solid #2c2f36;
+}
+body[data-theme='dark'] .user-item-header {
+    background-color: #232e3a;
+    color: #f3f4f6;
+}
+body[data-theme='dark'] .user-item-content {
+    background-color: #181a1b;
+    color: #bfc8d6;
+}
+
+body[data-theme='dark'] #apiKeysList thead,
+body[data-theme='dark'] #apiKeysList th {
+    background-color: #232e3a;
+    color: #bfc8d6;
+}
+
+body[data-theme='dark'] .confirm-dialog-cancel {
+    background-color: #23272e;
+    color: #bfc8d6;
+    border: 1px solid #2c2f36;
+}
+
+body[data-theme='dark'] .notification.success {
+    background-color: #19321a !important;
+    color: #b9fbc0 !important;
+    border-left: 4px solid #10b981 !important;
+}
+
+body[data-theme='dark'] .jira-file-name,
+body[data-theme='dark'] .jira-file-size {
+    color: #f3f4f6 !important;
 } 
