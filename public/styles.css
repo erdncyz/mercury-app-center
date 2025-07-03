@@ -1677,4 +1677,67 @@ main {
 
 #registerError:empty {
     display: none;
+}
+
+.jira-upload-area {
+    border: 2px dashed #dfe1e6;
+    border-radius: 6px;
+    background: #fafbfc;
+    padding: 1.5rem;
+    text-align: center;
+    color: #5e6c84;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 0.5rem;
+    position: relative;
+}
+.jira-upload-area.dragover {
+    border-color: #4c9aff;
+    background: #e6f0fa;
+}
+.jira-browse-link {
+    color: #0052cc;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.jira-file-info {
+    margin-top: 0.5rem;
+    background: #f4f5f7;
+    border-radius: 4px;
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.95rem;
+    color: #172b4d;
+}
+.jira-file-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    justify-content: space-between;
+}
+.jira-file-name {
+    font-weight: 500;
+    color: #172b4d;
+    word-break: break-all;
+}
+.jira-file-size {
+    color: #6b778c;
+    font-size: 0.95em;
+    margin-left: 0.5rem;
+}
+.jira-remove-btn {
+    background: none;
+    border: none;
+    color: #de350b;
+    cursor: pointer;
+    font-size: 0.95em;
+    padding: 0.2em 0.7em;
+    border-radius: 3px;
+    transition: background 0.2s;
+}
+.jira-remove-btn:hover {
+    background: #ffebe6;
 } 

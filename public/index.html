@@ -402,22 +402,27 @@
                     <div class="modal-close" onclick="closeModal('uploadModal')"></div>
                     <div class="upload-modal-header">
                         <h2>Upload New Version</h2>
-                        <div class="project-name" id="uploadProjectName"></div>
+                        <div style="display: flex; flex-direction: column; gap: 1.2rem; margin-bottom: 1.5rem;">
+                            <div class="form-group project-row" style="display: flex; align-items: center; gap: 1rem; margin: 0;">
+                                <label for="uploadProjectName" style="font-weight: bold; margin: 0; min-width: 120px;">Selected Project:</label>
+                                <span id="uploadProjectName" style="flex:1; min-width: 200px; max-width: 350px;"></span>
+                            </div>
+                            <div class="form-group platform-row" id="platformSelectGroup" style="display: flex; align-items: center; gap: 1rem; margin: 0;">
+                                <label for="platformSelect" style="font-weight: bold; margin: 0; min-width: 120px;">Select Platform:</label>
+                                <select id="platformSelect" name="platform" required style="flex:1; min-width: 200px; max-width: 350px;">
+                                    <option value="">Please select a platform</option>
+                                    <option value="ios">iOS</option>
+                                    <option value="android">Android</option>
+                                    <option value="tvos">Apple TV</option>
+                                    <option value="androidtv">Android TV</option>
+                                    <option value="huawei">Huawei</option>
+                                    <option value="onvotv">Onvo TV</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <form id="uploadForm">
                         <input type="hidden" id="projectIdInput" name="projectId">
-                        <div class="form-group" id="platformSelectGroup">
-                            <label>Platform</label>
-                            <select id="platformSelect" name="platform" required>
-                                <option value="">Please select a platform</option>
-                                <option value="ios">iOS</option>
-                                <option value="android">Android</option>
-                                <option value="tvos">Apple TV</option>
-                                <option value="androidtv">Android TV</option>
-                                <option value="huawei">Huawei</option>
-                                <option value="onvotv">Onvo TV</option>
-                            </select>
-                        </div>
                         
                         <!-- Standard fields (hidden for iOS/tvOS) -->
                         <div id="standardFieldsGroup">
@@ -453,7 +458,11 @@
                         
                         <div class="form-group" id="appFileGroup">
                             <label>App File</label>
-                            <input type="file" id="appFile" name="file" accept=".apk,.aab,.ipa,.zip">
+                            <div id="jiraUploadArea" class="jira-upload-area" onclick="document.getElementById('appFile').click();" ondragover="event.preventDefault(); this.classList.add('dragover');" ondragleave="this.classList.remove('dragover');" ondrop="handleJiraDrop(event)">
+                                <span id="jiraUploadText">Drag and drop a file here or <span class="jira-browse-link">Browse</span></span>
+                                <input type="file" id="appFile" name="file" accept=".apk,.aab,.ipa,.zip" style="display:none" onchange="handleJiraFileChange(event)">
+                            </div>
+                            <div id="jiraFileInfo" class="jira-file-info" style="display:none;"></div>
                             <div class="file-info">Accepted formats: APK, AAB, IPA, ZIP</div>
                         </div>
                         <div class="form-group" id="appUrlGroup" style="display:none;">
@@ -2914,6 +2923,35 @@
                     }
                 });
             });
+        }
+
+        function handleJiraDrop(event) {
+            event.preventDefault();
+            document.getElementById('jiraUploadArea').classList.remove('dragover');
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                document.getElementById('appFile').files = files;
+                handleJiraFileChange({ target: { files } });
+            }
+        }
+        function handleJiraFileChange(event) {
+            const file = event.target.files[0];
+            const infoDiv = document.getElementById('jiraFileInfo');
+            if (file) {
+                const size = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+                infoDiv.innerHTML = `<div class='jira-file-row'><span class='jira-file-name'>${file.name}</span> <span class='jira-file-size'>(${size})</span> <button type='button' class='jira-remove-btn' onclick='removeJiraFile()'>Remove</button></div>`;
+                infoDiv.style.display = '';
+                document.getElementById('jiraUploadText').style.display = 'none';
+            } else {
+                infoDiv.innerHTML = '';
+                infoDiv.style.display = 'none';
+                document.getElementById('jiraUploadText').style.display = '';
+            }
+        }
+        function removeJiraFile() {
+            const input = document.getElementById('appFile');
+            input.value = '';
+            handleJiraFileChange({ target: { files: [] } });
         }
     </script>
 </body>
