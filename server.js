@@ -231,7 +231,7 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
     res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
-        const { projectId, platform, version, notes, environment, url } = req.body;
+        const { projectId, platform, version, buildNumber, notes, environment, url } = req.body;
         
         if (!projectId || !platform || !version || !environment) {
             res.write(`data: ${JSON.stringify({ success: false, error: 'Missing required fields' })}\n\n`);
@@ -263,15 +263,15 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
             return;
         }
 
-        // Version check - show error if same version and platform already exists
-        const existingVersion = project.versions?.find(v => 
-            v.version === version && v.platform === platform.toLowerCase()
-        );
-
-        if (existingVersion) {
-            res.write(`data: ${JSON.stringify({ success: false, error: `Version ${version} already exists for ${platform}. Please use a different version number.` })}\n\n`);
-            res.end();
-            return;
+        // Version check - if same version and platform exists, add incremental number
+        let finalVersion = version;
+        let counter = 1;
+        
+        while (project.versions?.find(v => 
+            v.version === finalVersion && v.platform === platform.toLowerCase()
+        )) {
+            finalVersion = `${version} (${counter})`;
+            counter++;
         }
 
         let newVersion;
@@ -287,7 +287,8 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
             newVersion = {
                 id: Date.now().toString(),
                 platform: platform.toLowerCase(),
-                version: version || 'URL Only',
+                version: finalVersion || 'URL Only',
+                buildNumber: buildNumber || '',
                 environment: environment || 'production',
                 notes: notes || '',
                 url: url,
@@ -297,7 +298,7 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
         } 
         // Handle file uploads for other platforms
         else {
-            const fileName = `${version}-${req.file.originalname}`;
+            const fileName = `${finalVersion}-${req.file.originalname}`;
             const projectDir = path.join(__dirname, 'uploads', 'projects', project.name);
             const platformDir = path.join(projectDir, platform.toLowerCase());
             
@@ -351,7 +352,8 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
                 newVersion = {
                     id: Date.now().toString(),
                     platform: platform.toLowerCase(),
-                    version,
+                    version: finalVersion,
+                    buildNumber: buildNumber || '',
                     environment,
                     notes,
                     file: fileName,
@@ -1274,7 +1276,7 @@ app.post('/api/forgot-password', async (req, res) => {
         writeJsonFile(usersFile, userData);
         
         // Send reset email
-        const resetUrl = `${config.urls.base()}/reset-password?token=${resetToken}`;
+        const resetUrl = `http://52.208.68.75/reset-password?token=${resetToken}`;
         const mailOptions = {
             from: process.env.EMAIL_USER,
             to: email,

@@ -426,6 +426,10 @@
                                 <input type="text" id="versionInput" name="version" required placeholder="1.0.0">
                             </div>
                             <div class="form-group">
+                                <label>Build Number (Optional)</label>
+                                <input type="text" id="buildNumberInput" name="buildNumber" placeholder="123">
+                            </div>
+                            <div class="form-group">
                                 <label>Test Notes</label>
                                 <textarea id="testNotes" name="notes" rows="4"></textarea>
                             </div>
@@ -882,7 +886,7 @@
                                         <div class="version-item" onclick="toggleVersion(event, this)">
                                             <div class="version-header">
                                                 <div class="version-title">
-                                                    ${version.url ? `<span class="url-badge">URL</span>` : `<span class="version-number">v${version.version || 'N/A'}</span>`}
+                                                    ${version.url ? `<span class="url-badge">URL</span>` : `<span class="version-number">v${version.version || 'N/A'}${version.buildNumber ? ` (${version.buildNumber})` : ''}</span>`}
                                                     <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
                                                 </div>
                                                 <div class="version-toggle">▼</div>
@@ -905,6 +909,7 @@
                                                          <span class="environment-label">Environment:</span>
                                                          <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
                                                        </div>
+                                                       ${version.buildNumber ? `<div class="version-build-number">Build: ${version.buildNumber}</div>` : ''}
                                                        <div class="version-notes">${version.notes || 'No notes'}</div>`
                                                     }
                                                 </div>
@@ -938,7 +943,7 @@
                                         <div class="version-item" onclick="toggleVersion(event, this)">
                                             <div class="version-header">
                                                 <div class="version-title">
-                                                    <span class="version-number">v${version.version || 'N/A'}</span>
+                                                    <span class="version-number">v${version.version || 'N/A'}${version.buildNumber ? ` (${version.buildNumber})` : ''}</span>
                                                     <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
                                                     <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
                                                 </div>
@@ -951,6 +956,7 @@
                                                         <span class="environment-label">Environment:</span>
                                                         <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
                                                     </div>
+                                                    ${version.buildNumber ? `<div class="version-build-number">Build: ${version.buildNumber}</div>` : ''}
                                                     <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
@@ -983,7 +989,7 @@
                                         <div class="version-item" onclick="toggleVersion(event, this)">
                                             <div class="version-header">
                                                 <div class="version-title">
-                                                    ${version.url ? `<span class="url-badge">URL</span>` : `<span class="version-number">v${version.version || 'N/A'}</span>`}
+                                                    ${version.url ? `<span class="url-badge">URL</span>` : `<span class="version-number">v${version.version || 'N/A'}${version.buildNumber ? ` (${version.buildNumber})` : ''}</span>`}
                                                     <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
                                                 </div>
                                                 <div class="version-toggle">▼</div>
@@ -1006,6 +1012,7 @@
                                                          <span class="environment-label">Environment:</span>
                                                          <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
                                                        </div>
+                                                       ${version.buildNumber ? `<div class="version-build-number">Build: ${version.buildNumber}</div>` : ''}
                                                        <div class="version-notes">${version.notes || 'No notes'}</div>`
                                                     }
                                                 </div>
@@ -1039,7 +1046,7 @@
                                         <div class="version-item" onclick="toggleVersion(event, this)">
                                             <div class="version-header">
                                                 <div class="version-title">
-                                                    <span class="version-number">v${version.version || 'N/A'}</span>
+                                                    <span class="version-number">v${version.version || 'N/A'}${version.buildNumber ? ` (${version.buildNumber})` : ''}</span>
                                                     <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
                                                     <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
                                                 </div>
@@ -1052,6 +1059,7 @@
                                                         <span class="environment-label">Environment:</span>
                                                         <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
                                                     </div>
+                                                    ${version.buildNumber ? `<div class="version-build-number">Build: ${version.buildNumber}</div>` : ''}
                                                     <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
@@ -1084,7 +1092,7 @@
                                         <div class="version-item" onclick="toggleVersion(event, this)">
                                             <div class="version-header">
                                                 <div class="version-title">
-                                                    <span class="version-number">v${version.version || 'N/A'}</span>
+                                                    <span class="version-number">v${version.version || 'N/A'}${version.buildNumber ? ` (${version.buildNumber})` : ''}</span>
                                                     <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
                                                     <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
                                                 </div>
@@ -1097,6 +1105,7 @@
                                                         <span class="environment-label">Environment:</span>
                                                         <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
                                                     </div>
+                                                    ${version.buildNumber ? `<div class="version-build-number">Build: ${version.buildNumber}</div>` : ''}
                                                     <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
@@ -1129,7 +1138,7 @@
                                         <div class="version-item" onclick="toggleVersion(event, this)">
                                             <div class="version-header">
                                                 <div class="version-title">
-                                                    <span class="version-number">v${version.version || 'N/A'}</span>
+                                                    <span class="version-number">v${version.version || 'N/A'}${version.buildNumber ? ` (${version.buildNumber})` : ''}</span>
                                                     <span class="version-environment ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
                                                     <span class="version-date">${new Date(version.uploadedAt).toLocaleString()}</span>
                                                 </div>
@@ -1142,6 +1151,7 @@
                                                         <span class="environment-label">Environment:</span>
                                                         <span class="environment-value ${version.environment || 'undefined'}">${getEnvironmentLabel(version.environment)}</span>
                                                     </div>
+                                                    ${version.buildNumber ? `<div class="version-build-number">Build: ${version.buildNumber}</div>` : ''}
                                                     <div class="version-notes">${version.notes || 'No notes'}</div>
                                                 </div>
                                                 <div class="version-actions">
