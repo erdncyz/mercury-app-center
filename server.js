@@ -1139,10 +1139,21 @@ app.post('/api/external/upload', apiKeyMiddleware, upload.single('file'), async 
             projectsData.projects.push(project);
         }
 
+        // Version check - if same version and platform exists, add incremental number
+        let finalVersion = version || '1.0.0';
+        let counter = 1;
+        
+        while (project.versions?.find(v => 
+            v.version === finalVersion && v.platform === platform.toLowerCase()
+        )) {
+            finalVersion = `${version || '1.0.0'} (${counter})`;
+            counter++;
+        }
+
         // Create version entry
         const versionEntry = {
             id: Date.now().toString(),
-            version: version || '1.0.0',
+            version: finalVersion,
             platform,
             uploadedAt: new Date().toISOString(),
             uploadedBy: 'API',
@@ -1155,7 +1166,7 @@ app.post('/api/external/upload', apiKeyMiddleware, upload.single('file'), async 
             versionEntry.url = req.body.url;
         } else if (req.file) {
             const fileExt = path.extname(req.file.originalname);
-            const fileName = `${version}-${req.file.originalname}`;
+            const fileName = `${finalVersion}-${req.file.originalname}`;
             const platformDir = path.join(__dirname, 'uploads', 'projects', project.name, platform.toLowerCase());
             const filePath = path.join(platformDir, fileName);
             
@@ -1283,7 +1294,20 @@ app.post('/api/forgot-password', async (req, res) => {
         writeJsonFile(usersFile, userData);
         
         // Send reset email
-        const resetUrl = `http://52.208.68.75/reset-password?token=${resetToken}`;
+        const resetUrl = `http://${config.server.host}:${config.server.port}/reset-password?token=${resetToken}`;
+        
+        // Check if email is configured
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+            console.log('Email not configured. Reset token:', resetToken);
+            console.log('Reset URL:', resetUrl);
+            // For development, just log the reset URL
+            return res.json({
+                success: true,
+                message: 'Password reset token generated. Check server logs for reset URL (email not configured).',
+                resetUrl: resetUrl // Remove this in production
+            });
+        }
+        
         const mailOptions = {
             from: process.env.EMAIL_USER,
             to: email,
@@ -1391,7 +1415,17 @@ app.post('/api/forgot-password', async (req, res) => {
 `
         };
         
-        await transporter.sendMail(mailOptions);
+        try {
+            await transporter.sendMail(mailOptions);
+        } catch (emailError) {
+            console.error('Email sending failed:', emailError);
+            // Still return success but with a different message
+            return res.json({
+                success: true,
+                message: 'Password reset token generated. Email sending failed - check server logs for reset URL.',
+                resetUrl: resetUrl // Remove this in production
+            });
+        }
         
         res.json({
             success: true,

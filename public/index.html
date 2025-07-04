@@ -6,6 +6,19 @@
     <title>Mercury App Center</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="mercury-icon.png" type="image/png">
+    <script>
+        // Dark mode flash prevention - runs immediately before page renders
+        (function() {
+            const saved = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const shouldUseDark = saved === 'dark' || (saved !== 'light' && prefersDark);
+            
+            if (shouldUseDark) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.body.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
     <style>
         .api-keys-section {
             margin-top: 20px;
