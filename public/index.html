@@ -332,6 +332,9 @@
 </head>
 <body>
     <div id="loginContainer">
+        <div class="login-theme-toggle">
+            <button id="loginDarkModeToggle" title="Toggle dark mode">🌙</button>
+        </div>
         <div class="login-box">
             <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'%3E%3Cpath d='M12 2c-4.4 0-8 3.6-8 8s3.6 8 8 8 8-3.6 8-8-3.6-8-8-8zm0 14c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6z'/%3E%3Ccircle cx='12' cy='8' r='2'/%3E%3Crect x='11' y='10' width='2' height='6'/%3E%3Crect x='11' y='16' width='2' height='2'/%3E%3C/svg%3E" alt="Mercury Icon" class="login-icon">
             <h2>Mercury App Center</h2>
@@ -810,11 +813,20 @@
             
             // Dark mode toggle logic
             const darkModeToggle = document.getElementById('darkModeToggle');
+            const loginDarkModeToggle = document.getElementById('loginDarkModeToggle');
+            
             function setTheme(theme) {
                 document.body.setAttribute('data-theme', theme);
                 document.documentElement.setAttribute('data-theme', theme);
                 localStorage.setItem('theme', theme);
-                darkModeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+                
+                // Update both toggle buttons if they exist
+                if (darkModeToggle) {
+                    darkModeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+                }
+                if (loginDarkModeToggle) {
+                    loginDarkModeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+                }
                 
                 // Update theme-color meta tag for PWA status bar
                 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
@@ -822,10 +834,22 @@
                     themeColorMeta.setAttribute('content', theme === 'dark' ? '#181a1b' : '#ffffff');
                 }
             }
-            darkModeToggle.onclick = function() {
-                const current = document.body.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-                setTheme(current === 'dark' ? 'light' : 'dark');
-            };
+            
+            // Main app dark mode toggle
+            if (darkModeToggle) {
+                darkModeToggle.onclick = function() {
+                    const current = document.body.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                    setTheme(current === 'dark' ? 'light' : 'dark');
+                };
+            }
+            
+            // Login page dark mode toggle
+            if (loginDarkModeToggle) {
+                loginDarkModeToggle.onclick = function() {
+                    const current = document.body.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                    setTheme(current === 'dark' ? 'light' : 'dark');
+                };
+            }
             (function() {
                 const saved = localStorage.getItem('theme');
                 if (saved === 'dark' || (saved !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {

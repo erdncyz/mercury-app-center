@@ -107,6 +107,36 @@ body[data-theme='dark'] input:-webkit-autofill:active {
     position: relative;
 }
 
+.login-theme-toggle {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+    z-index: 10;
+}
+
+#loginDarkModeToggle {
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    width: 3rem;
+    height: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+#loginDarkModeToggle:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
 .login-box {
     background: var(--card-background);
     padding: 3rem;
@@ -1874,6 +1904,18 @@ body[data-theme='dark'] .login-box {
     color: #f3f4f6;
     box-shadow: 0 4px 20px -2px rgba(0,0,0,0.7);
 }
+
+body[data-theme='dark'] #loginDarkModeToggle {
+    background: #2c2f36;
+    border-color: #3c4043;
+    color: #f3f4f6;
+}
+
+body[data-theme='dark'] #loginDarkModeToggle:hover {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
 body[data-theme='dark'] .auth-toggle {
     background-color: #232e3a;
 }
@@ -2409,5 +2451,19 @@ body[data-theme='dark'] .pwa-benefits {
     
     .pwa-benefits ul {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Mobile styles for login theme toggle */
+@media (max-width: 768px) {
+    .login-theme-toggle {
+        top: 1rem;
+        right: 1rem;
+    }
+    
+    #loginDarkModeToggle {
+        width: 2.5rem;
+        height: 2.5rem;
+        font-size: 1rem;
     }
 } 
