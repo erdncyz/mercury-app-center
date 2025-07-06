@@ -579,13 +579,13 @@
     <!-- PWA Install Instructions Modal -->
     <div id="pwaInstructionsModal" class="modal">
         <div class="modal-content pwa-instructions-modal">
-            <h2>📱 Mercury App Center'ı Telefonunuza Yükleyin</h2>
-            <p>Daha iyi bir deneyim için uygulamayı cihazınıza yükleyebilirsiniz:</p>
+            <h2>📱 Install Mercury App Center on Your Device</h2>
+            <p>For a better experience, you can install the app on your device:</p>
             
             <div class="instruction-tabs">
                 <button class="instruction-tab active" data-tab="ios">🍎 iOS</button>
                 <button class="instruction-tab" data-tab="android">🤖 Android</button>
-                <button class="instruction-tab" data-tab="desktop">💻 Masaüstü</button>
+                <button class="instruction-tab" data-tab="desktop">💻 Desktop</button>
             </div>
 
             <div class="instruction-content">
@@ -593,17 +593,17 @@
                     <div class="instruction-steps">
                         <div class="step">
                             <div class="step-number">1</div>
-                            <div class="step-text">Safari'de <strong>Paylaş</strong> butonuna tıklayın</div>
+                            <div class="step-text">Tap the <strong>Share</strong> button in Safari</div>
                             <div class="step-icon">📤</div>
                         </div>
                         <div class="step">
                             <div class="step-number">2</div>
-                            <div class="step-text"><strong>"Ana Ekrana Ekle"</strong> seçeneğini bulun</div>
+                            <div class="step-text">Find <strong>"Add to Home Screen"</strong> option</div>
                             <div class="step-icon">➕</div>
                         </div>
                         <div class="step">
                             <div class="step-number">3</div>
-                            <div class="step-text"><strong>"Ekle"</strong> butonuna tıklayın</div>
+                            <div class="step-text">Tap <strong>"Add"</strong> button</div>
                             <div class="step-icon">✅</div>
                         </div>
                     </div>
@@ -613,17 +613,17 @@
                     <div class="instruction-steps">
                         <div class="step">
                             <div class="step-number">1</div>
-                            <div class="step-text">Chrome'da <strong>menü</strong> butonuna tıklayın (⋮)</div>
+                            <div class="step-text">Tap the <strong>menu</strong> button in Chrome (⋮)</div>
                             <div class="step-icon">⋮</div>
                         </div>
                         <div class="step">
                             <div class="step-number">2</div>
-                            <div class="step-text"><strong>"Ana ekrana ekle"</strong> seçeneğini seçin</div>
+                            <div class="step-text">Select <strong>"Add to Home screen"</strong> option</div>
                             <div class="step-icon">📲</div>
                         </div>
                         <div class="step">
                             <div class="step-number">3</div>
-                            <div class="step-text"><strong>"Yükle"</strong> butonuna tıklayın</div>
+                            <div class="step-text">Tap <strong>"Install"</strong> button</div>
                             <div class="step-icon">⬇️</div>
                         </div>
                     </div>
@@ -633,17 +633,17 @@
                     <div class="instruction-steps">
                         <div class="step">
                             <div class="step-number">1</div>
-                            <div class="step-text">Adres çubuğundaki <strong>yükleme simgesine</strong> tıklayın</div>
+                            <div class="step-text">Click the <strong>install icon</strong> in the address bar</div>
                             <div class="step-icon">⬇️</div>
                         </div>
                         <div class="step">
                             <div class="step-number">2</div>
-                            <div class="step-text">Veya sağ alt köşedeki <strong>"Uygulamayı Yükle"</strong> butonunu kullanın</div>
+                            <div class="step-text">Or use the <strong>"Install App"</strong> button in the bottom right</div>
                             <div class="step-icon">🔽</div>
                         </div>
                         <div class="step">
                             <div class="step-number">3</div>
-                            <div class="step-text"><strong>"Yükle"</strong> butonuna tıklayın</div>
+                            <div class="step-text">Click <strong>"Install"</strong> button</div>
                             <div class="step-icon">✅</div>
                         </div>
                     </div>
@@ -651,18 +651,18 @@
             </div>
 
             <div class="pwa-benefits">
-                <h3>✨ Avantajlar:</h3>
+                <h3>✨ Benefits:</h3>
                 <ul>
-                    <li>🚀 Daha hızlı açılış</li>
-                    <li>📱 Tam ekran deneyim</li>
-                    <li>🔔 Bildirim desteği</li>
-                    <li>📶 Çevrimdışı kullanım</li>
+                    <li>🚀 Faster loading</li>
+                    <li>📱 Full screen experience</li>
+                    <li>🔔 Push notifications</li>
+                    <li>📶 Offline usage</li>
                 </ul>
             </div>
 
             <div class="modal-actions">
-                <button class="cancel-btn" onclick="closePWAInstructions()">Şimdi Değil</button>
-                <button class="create-btn" onclick="closePWAInstructions(true)">Anladım</button>
+                <button class="cancel-btn" onclick="closePWAInstructions()">Not Now</button>
+                <button class="create-btn" onclick="closePWAInstructions(true)">Got It</button>
             </div>
         </div>
     </div>
@@ -3271,7 +3271,7 @@
         function showInstallButton() {
             // You can add an install button to your UI here
             const installButton = document.createElement('button');
-            installButton.textContent = 'Uygulamayı Yükle';
+            installButton.textContent = 'Install App';
             installButton.style.cssText = `
                 position: fixed;
                 bottom: 20px;
