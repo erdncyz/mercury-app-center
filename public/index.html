@@ -576,6 +576,97 @@
     <!-- Notification Container -->
     <div id="notification-container" aria-live="assertive" aria-atomic="true"></div>
 
+    <!-- PWA Install Instructions Modal -->
+    <div id="pwaInstructionsModal" class="modal">
+        <div class="modal-content pwa-instructions-modal">
+            <h2>📱 Mercury App Center'ı Telefonunuza Yükleyin</h2>
+            <p>Daha iyi bir deneyim için uygulamayı cihazınıza yükleyebilirsiniz:</p>
+            
+            <div class="instruction-tabs">
+                <button class="instruction-tab active" data-tab="ios">🍎 iOS</button>
+                <button class="instruction-tab" data-tab="android">🤖 Android</button>
+                <button class="instruction-tab" data-tab="desktop">💻 Masaüstü</button>
+            </div>
+
+            <div class="instruction-content">
+                <div id="ios-instructions" class="instruction-panel active">
+                    <div class="instruction-steps">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-text">Safari'de <strong>Paylaş</strong> butonuna tıklayın</div>
+                            <div class="step-icon">📤</div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-text"><strong>"Ana Ekrana Ekle"</strong> seçeneğini bulun</div>
+                            <div class="step-icon">➕</div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-text"><strong>"Ekle"</strong> butonuna tıklayın</div>
+                            <div class="step-icon">✅</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="android-instructions" class="instruction-panel">
+                    <div class="instruction-steps">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-text">Chrome'da <strong>menü</strong> butonuna tıklayın (⋮)</div>
+                            <div class="step-icon">⋮</div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-text"><strong>"Ana ekrana ekle"</strong> seçeneğini seçin</div>
+                            <div class="step-icon">📲</div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-text"><strong>"Yükle"</strong> butonuna tıklayın</div>
+                            <div class="step-icon">⬇️</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="desktop-instructions" class="instruction-panel">
+                    <div class="instruction-steps">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-text">Adres çubuğundaki <strong>yükleme simgesine</strong> tıklayın</div>
+                            <div class="step-icon">⬇️</div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-text">Veya sağ alt köşedeki <strong>"Uygulamayı Yükle"</strong> butonunu kullanın</div>
+                            <div class="step-icon">🔽</div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-text"><strong>"Yükle"</strong> butonuna tıklayın</div>
+                            <div class="step-icon">✅</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pwa-benefits">
+                <h3>✨ Avantajlar:</h3>
+                <ul>
+                    <li>🚀 Daha hızlı açılış</li>
+                    <li>📱 Tam ekran deneyim</li>
+                    <li>🔔 Bildirim desteği</li>
+                    <li>📶 Çevrimdışı kullanım</li>
+                </ul>
+            </div>
+
+            <div class="modal-actions">
+                <button class="cancel-btn" onclick="closePWAInstructions()">Şimdi Değil</button>
+                <button class="create-btn" onclick="closePWAInstructions(true)">Anladım</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const CONFIG = {
             baseUrl: `http://${location.hostname}:${location.port || 80}`
@@ -616,6 +707,67 @@
             }
         }
 
+        // PWA Instructions Modal Functions
+        function showPWAInstructions() {
+            const modal = document.getElementById('pwaInstructionsModal');
+            modal.style.display = 'flex';
+            
+            // Setup tab switching
+            document.querySelectorAll('.instruction-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Remove active class from all tabs and panels
+                    document.querySelectorAll('.instruction-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.instruction-panel').forEach(p => p.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    this.classList.add('active');
+                    
+                    // Show corresponding panel
+                    const targetPanel = document.getElementById(this.dataset.tab + '-instructions');
+                    if (targetPanel) {
+                        targetPanel.classList.add('active');
+                    }
+                });
+            });
+        }
+        
+        function closePWAInstructions(understood = false) {
+            const modal = document.getElementById('pwaInstructionsModal');
+            modal.style.display = 'none';
+            
+            if (understood) {
+                // Mark as shown so it doesn't appear again
+                localStorage.setItem('pwaInstructionsShown', 'true');
+            }
+        }
+        
+        function checkAndShowPWAInstructions() {
+            // Only show if not already shown and not in standalone mode (already installed)
+            const alreadyShown = localStorage.getItem('pwaInstructionsShown');
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+            const isIOSStandalone = window.navigator.standalone;
+            
+            console.log('PWA Instructions Check:', {
+                alreadyShown,
+                isStandalone,
+                isIOSStandalone
+            });
+            
+            if (!alreadyShown && !isStandalone && !isIOSStandalone) {
+                // Show after a short delay to let the page load
+                console.log('Showing PWA instructions...');
+                setTimeout(() => {
+                    showPWAInstructions();
+                }, 2000);
+            } else {
+                console.log('PWA instructions not shown because:', {
+                    alreadyShown: !!alreadyShown,
+                    isStandalone,
+                    isIOSStandalone
+                });
+            }
+        }
+
         // When document is ready
         document.addEventListener('DOMContentLoaded', async function() {
             // Set auth toggle event listeners
@@ -646,10 +798,15 @@
                 document.getElementById('mainContainer').style.display = 'block';
                 updateUsername();
                 showAllApps();
+                // Check if we should show PWA instructions
+                checkAndShowPWAInstructions();
             }
             
             await checkLoginStatus();
             setupModalBackgroundClose();
+            
+            // Always check for PWA instructions on page load (whether logged in or not)
+            checkAndShowPWAInstructions();
             
             // Dark mode toggle logic
             const darkModeToggle = document.getElementById('darkModeToggle');
@@ -729,6 +886,8 @@
                     await checkAdminStatus();
                     await updateUserPermissions();
                     showAllApps();
+                    // Check if we should show PWA instructions after login
+                    checkAndShowPWAInstructions();
                 } else {
                     showLoginError(data.message || data.error || 'Invalid username or password');
                 }
@@ -820,6 +979,8 @@
                     updateUsername();
                     await checkAdminStatus();
                     await updateUserPermissions();
+                    // Check if we should show PWA instructions after session check
+                    checkAndShowPWAInstructions();
                 } else {
                     localStorage.removeItem('isLoggedIn');
                     localStorage.removeItem('username');
