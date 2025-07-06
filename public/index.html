@@ -6,6 +6,12 @@
     <title>Mercury App Center</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="mercury-icon.png" type="image/png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Mercury">
+    <link rel="apple-touch-icon" href="mercury-icon.png">
     <script>
         // Dark mode flash prevention - runs immediately before page renders
         (function() {
@@ -16,6 +22,11 @@
             if (shouldUseDark) {
                 document.documentElement.setAttribute('data-theme', 'dark');
                 document.body.setAttribute('data-theme', 'dark');
+                // Update theme color for dark mode
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#181a1b');
+            } else {
+                // Update theme color for light mode
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff');
             }
         })();
     </script>
@@ -647,6 +658,12 @@
                 document.documentElement.setAttribute('data-theme', theme);
                 localStorage.setItem('theme', theme);
                 darkModeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+                
+                // Update theme-color meta tag for PWA status bar
+                const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+                if (themeColorMeta) {
+                    themeColorMeta.setAttribute('content', theme === 'dark' ? '#181a1b' : '#ffffff');
+                }
             }
             darkModeToggle.onclick = function() {
                 const current = document.body.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
@@ -3064,6 +3081,63 @@
             const input = document.getElementById('appFile');
             input.value = '';
             handleJiraFileChange({ target: { files: [] } });
+        }
+
+        // Service Worker Registration for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(function(registration) {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(function(err) {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+
+        // PWA Install Prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later
+            deferredPrompt = e;
+            // Show install button (you can add this to your UI)
+            showInstallButton();
+        });
+
+        function showInstallButton() {
+            // You can add an install button to your UI here
+            const installButton = document.createElement('button');
+            installButton.textContent = 'Uygulamayı Yükle';
+            installButton.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background-color: #6366f1;
+                color: white;
+                border: none;
+                padding: 12px 20px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-weight: 500;
+                z-index: 1000;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            `;
+            installButton.addEventListener('click', () => {
+                installButton.style.display = 'none';
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the A2HS prompt');
+                    } else {
+                        console.log('User dismissed the A2HS prompt');
+                    }
+                    deferredPrompt = null;
+                });
+            });
+            document.body.appendChild(installButton);
         }
     </script>
 </body>
