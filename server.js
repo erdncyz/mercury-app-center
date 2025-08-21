@@ -142,6 +142,95 @@ function writeJsonFile(filePath, data) {
     }
 }
 
+// Function to handle large file uploads by splitting them automatically
+async function handleLargeFileUpload(req, res, metadata) {
+    try {
+        const { projectId, platform, version, buildNumber, notes, environment } = metadata;
+        const file = req.file;
+        const chunkSize = 15 * 1024 * 1024; // 15MB chunks
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        
+        res.write(`data: ${JSON.stringify({ type: 'info', message: `Large file detected (${(file.size / 1024 / 1024).toFixed(2)} MB). Splitting into ${totalChunks} chunks...` })}\n\n`);
+        
+        const uploadedParts = [];
+        const tempDir = path.join(__dirname, 'uploads', 'temp', 'auto-split', Date.now().toString());
+        fs.mkdirSync(tempDir, { recursive: true });
+        
+        // Split file into chunks
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, file.size);
+            const chunkPath = path.join(tempDir, `chunk-${i}`);
+            
+            // Read chunk from uploaded file
+            const chunk = fs.readFileSync(file.path, { start, end });
+            fs.writeFileSync(chunkPath, chunk);
+            
+            // Create version for this chunk
+            const chunkVersion = `${version}-part${i + 1}`;
+            const chunkFileName = `${chunkVersion}-${path.basename(file.originalname)}`;
+            
+            // Move chunk to final location
+            const projectDir = path.join(__dirname, 'uploads', 'projects', 'TOD MENA');
+            const platformDir = path.join(projectDir, platform.toLowerCase());
+            fs.mkdirSync(platformDir, { recursive: true });
+            
+            const finalPath = path.join(platformDir, chunkFileName);
+            fs.copyFileSync(chunkPath, finalPath);
+            
+            // Create version object
+            const newVersion = {
+                id: Date.now().toString() + i,
+                platform: platform.toLowerCase(),
+                version: chunkVersion,
+                buildNumber: buildNumber ? `${buildNumber}-part${i + 1}` : '',
+                environment: environment,
+                notes: notes ? `${notes} (Part ${i + 1}/${totalChunks})` : `Auto-split part ${i + 1}/${totalChunks}`,
+                file: chunkFileName,
+                uploadedBy: req.session.username,
+                uploadedAt: new Date().toISOString()
+            };
+            
+            // Add to project
+            const projectsFile = path.join(__dirname, 'data', 'projects.json');
+            let data = readJsonFile(projectsFile);
+            const project = data.projects.find(p => p.id === projectId);
+            
+            if (project) {
+                if (!Array.isArray(project.versions)) {
+                    project.versions = [];
+                }
+                project.versions.unshift(newVersion);
+                writeJsonFile(projectsFile, data);
+                uploadedParts.push(newVersion);
+            }
+            
+            const progress = Math.round(((i + 1) / totalChunks) * 100);
+            res.write(`data: ${JSON.stringify({ type: 'progress', progress, message: `Uploaded part ${i + 1}/${totalChunks}` })}\n\n`);
+        }
+        
+        // Clean up
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        fs.unlinkSync(file.path); // Remove original temp file
+        
+        // Send completion message
+        res.write(`data: ${JSON.stringify({ 
+            type: 'complete', 
+            success: true, 
+            message: `Large file successfully split and uploaded in ${totalChunks} parts`,
+            parts: uploadedParts,
+            totalParts: totalChunks
+        })}\n\n`);
+        
+        res.end();
+        
+    } catch (error) {
+        console.error('Large file upload error:', error);
+        res.write(`data: ${JSON.stringify({ type: 'error', success: false, error: 'Failed to process large file' })}\n\n`);
+        res.end();
+    }
+}
+
 // Email configuration
 const transporter = nodemailer.createTransport({
     host: config.emailConfig.host,
@@ -254,6 +343,12 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
 
     try {
         const { projectId, platform, version, buildNumber, notes, environment, url } = req.body;
+        
+        // Check if file is provided and if it's a large file (>20MB)
+        if (req.file && req.file.size > 20 * 1024 * 1024) {
+            // Large file detected - split and upload automatically
+            return handleLargeFileUpload(req, res, { projectId, platform, version, buildNumber, notes, environment });
+        }
         
         if (!projectId || !platform || !version || !environment) {
             res.write(`data: ${JSON.stringify({ success: false, error: 'Missing required fields' })}\n\n`);
