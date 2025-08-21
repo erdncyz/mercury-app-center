@@ -2660,37 +2660,7 @@
             // ... existing code ...
         }
 
-        // First get the current version
-        fetch(`${CONFIG.baseUrl}/api/projects/${projectId}/versions/${versionId}`, {
-            credentials: 'include'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.version) {
-                const version = data.version;
-                
-                // Open edit modal
-                const modal = document.getElementById('editVersionModal') || createEditVersionModal();
-                
-                // Fill form fields
-                document.getElementById('editVersionId').value = version.id;
-                document.getElementById('editProjectId').value = projectId;
-                document.getElementById('editVersionNumber').value = version.version || '';
-                document.getElementById('editEnvironment').value = version.environment || 'production';
-                document.getElementById('editNotes').value = version.notes || '';
-                document.getElementById('editUrl').value = version.url || '';
-                document.getElementById('editPlatform').value = version.platform || '';
-                
-                // Show modal
-                modal.style.display = 'flex';
-            } else {
-                showNotification('Version information could not be retrieved', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Version edit error:', error);
-            showNotification('Version editing error', 'error');
-        });
+        // This code was incorrectly placed in global scope - removing it
 
         // Create edit version modal if not exists
         function createEditVersionModal() {
@@ -3388,18 +3358,31 @@
         function handleJiraFileChange(event) {
             const file = event.target.files[0];
             const infoDiv = document.getElementById('jiraFileInfo');
+            const uploadText = document.getElementById('jiraUploadText');
+            const largeFileSize = document.getElementById('largeFileSize');
+            const largeFileModal = document.getElementById('largeFileModal');
+            
             if (file) {
                 const size = (file.size / 1024 / 1024).toFixed(2) + ' MB';
-                infoDiv.innerHTML = `<div class='jira-file-row'><span class='jira-file-name'>${file.name}</span> <span class='jira-file-size'>(${size})</span> <button type='button' class='jira-remove-btn' onclick='removeJiraFile()'>Remove</button></div>`;
-                infoDiv.style.display = '';
-                document.getElementById('jiraUploadText').style.display = 'none';
+                if (infoDiv) {
+                    infoDiv.innerHTML = `<div class='jira-file-row'><span class='jira-file-name'>${file.name}</span> <span class='jira-file-size'>(${size})</span> <button type='button' class='jira-remove-btn' onclick='removeJiraFile()'>Remove</button></div>`;
+                    infoDiv.style.display = '';
+                }
+                if (uploadText) {
+                    uploadText.style.display = 'none';
+                }
                 
                 // Check if file is large (>20MB) and show modal immediately
                 const fileSizeMB = file.size / (1024 * 1024);
+                
                 if (fileSizeMB > 20) {
                     // Show large file modal immediately
-                    document.getElementById('largeFileSize').textContent = `${fileSizeMB.toFixed(2)} MB`;
-                    document.getElementById('largeFileModal').style.display = 'flex';
+                    if (largeFileSize) {
+                        largeFileSize.textContent = `${fileSizeMB.toFixed(2)} MB`;
+                    }
+                    if (largeFileModal) {
+                        largeFileModal.style.display = 'flex';
+                    }
                     
                     // Store file info for later use
                     pendingUploadData = {
@@ -3408,14 +3391,20 @@
                     };
                 }
             } else {
-                infoDiv.innerHTML = '';
-                infoDiv.style.display = 'none';
-                document.getElementById('jiraUploadText').style.display = '';
+                if (infoDiv) {
+                    infoDiv.innerHTML = '';
+                    infoDiv.style.display = 'none';
+                }
+                if (uploadText) {
+                    uploadText.style.display = '';
+                }
             }
         }
         function removeJiraFile() {
             const input = document.getElementById('appFile');
-            input.value = '';
+            if (input) {
+                input.value = '';
+            }
             handleJiraFileChange({ target: { files: [] } });
             
             // Close large file modal if it's open
@@ -3427,8 +3416,15 @@
 
         // Large File Modal Functions
         function showLargeFileModal(fileSizeMB, formData, submitButton, originalContent) {
-            document.getElementById('largeFileSize').textContent = `${fileSizeMB.toFixed(2)} MB`;
-            document.getElementById('largeFileModal').style.display = 'flex';
+            const largeFileSize = document.getElementById('largeFileSize');
+            const largeFileModal = document.getElementById('largeFileModal');
+            
+            if (largeFileSize) {
+                largeFileSize.textContent = `${fileSizeMB.toFixed(2)} MB`;
+            }
+            if (largeFileModal) {
+                largeFileModal.style.display = 'flex';
+            }
             
             // Store upload data for later use
             pendingUploadData = {
@@ -3439,10 +3435,13 @@
         }
 
         function closeLargeFileModal() {
-            document.getElementById('largeFileModal').style.display = 'none';
+            const largeFileModal = document.getElementById('largeFileModal');
+            if (largeFileModal) {
+                largeFileModal.style.display = 'none';
+            }
             
             // Reset button if upload was cancelled
-            if (pendingUploadData) {
+            if (pendingUploadData && pendingUploadData.submitButton) {
                 pendingUploadData.submitButton.innerHTML = pendingUploadData.originalContent;
                 pendingUploadData.submitButton.disabled = false;
                 pendingUploadData = null;
@@ -3451,14 +3450,17 @@
 
         function cancelLargeFileUpload() {
             // Clear any pending upload data
-            if (pendingUploadData) {
+            if (pendingUploadData && pendingUploadData.submitButton) {
                 pendingUploadData.submitButton.innerHTML = pendingUploadData.originalContent;
                 pendingUploadData.submitButton.disabled = false;
                 pendingUploadData = null;
             }
             
             // Close the modal
-            document.getElementById('largeFileModal').style.display = 'none';
+            const largeFileModal = document.getElementById('largeFileModal');
+            if (largeFileModal) {
+                largeFileModal.style.display = 'none';
+            }
             
             // Show cancellation message
             showNotification('Large file upload cancelled', 'info');

@@ -84,6 +84,7 @@ body[data-theme='dark'] .modal-actions button.cancel-btn {
 }
 
 /* Large File Modal Styles */
+
 .warning-icon {
     display: flex;
     align-items: center;
@@ -674,6 +675,11 @@ body[data-theme='dark'] .app-actions button:first-child:active {
     z-index: 1000;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch; /* Smooth scrolling for iOS */
+}
+
+/* Large file modal should be on top */
+#largeFileModal {
+    z-index: 1001 !important;
 }
 
 .modal-content {

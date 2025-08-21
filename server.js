@@ -1273,7 +1273,7 @@ app.delete('/api/keys/:keyId', isAdmin, (req, res) => {
 });
 
 // Chunk upload endpoint
-app.post('/api/upload-chunk', upload.single('file'), (req, res) => {
+app.post('/api/upload-chunk', upload.single('file'), async (req, res) => {
     try {
         const { chunkIndex, totalChunks, originalFileName, originalFileSize } = req.body;
         const { projectId, platform, version, buildNumber, notes, environment } = req.body;
@@ -1312,19 +1312,48 @@ app.post('/api/upload-chunk', upload.single('file'), (req, res) => {
             fs.mkdirSync(tempDir, { recursive: true });
             
             const reassembledPath = path.join(tempDir, originalFileName);
-            const writeStream = fs.createWriteStream(reassembledPath);
             
-            // Write chunks in order
-            for (let i = 0; i < fileInfo.chunks.length; i++) {
-                const chunkPath = fileInfo.chunks[i];
-                const chunkData = fs.readFileSync(chunkPath);
-                writeStream.write(chunkData);
+            try {
+                // Write chunks in order
+                const writeStream = fs.createWriteStream(reassembledPath);
                 
-                // Clean up chunk file
-                fs.unlinkSync(chunkPath);
+                for (let i = 0; i < fileInfo.chunks.length; i++) {
+                    const chunkPath = fileInfo.chunks[i];
+                    if (fs.existsSync(chunkPath)) {
+                        const chunkData = fs.readFileSync(chunkPath);
+                        writeStream.write(chunkData);
+                        
+                        // Clean up chunk file
+                        fs.unlinkSync(chunkPath);
+                    } else {
+                        console.error(`Chunk file not found: ${chunkPath}`);
+                        throw new Error(`Chunk ${i} file not found`);
+                    }
+                }
+                
+                writeStream.end();
+                
+                // Wait for write stream to finish
+                await new Promise((resolve, reject) => {
+                    writeStream.on('finish', resolve);
+                    writeStream.on('error', reject);
+                });
+                
+                // Verify reassembled file exists
+                if (!fs.existsSync(reassembledPath)) {
+                    throw new Error('Reassembled file was not created');
+                }
+                
+                console.log(`File reassembled successfully: ${reassembledPath}`);
+                
+            } catch (error) {
+                console.error('Error reassembling file:', error);
+                // Clean up temp directory
+                if (fs.existsSync(tempDir)) {
+                    fs.rmSync(tempDir, { recursive: true, force: true });
+                }
+                throw error;
             }
-            
-            writeStream.end();
             
             // Create a mock req.file object for the reassembled file
             const reassembledFile = {
@@ -1336,26 +1365,36 @@ app.post('/api/upload-chunk', upload.single('file'), (req, res) => {
             // Process the reassembled file using existing logic
             const { projectId, platform, version, buildNumber, notes, environment } = fileInfo.metadata;
             
+            // Ensure platform is defined and valid
+            const validPlatform = platform && typeof platform === 'string' ? platform.toLowerCase() : 'android';
+            
             // Create version object
             const newVersion = {
                 id: Date.now().toString(),
-                platform: platform.toLowerCase(),
-                version: version,
+                platform: validPlatform,
+                version: version || '1.0.0',
                 buildNumber: buildNumber || '',
-                environment: environment,
+                environment: environment || 'production',
                 notes: notes || '',
                 file: originalFileName,
-                uploadedBy: req.session.username,
+                uploadedBy: req.session.username || 'Unknown',
                 uploadedAt: new Date().toISOString()
             };
             
             // Move file to final location
             const projectDir = path.join(__dirname, 'uploads', 'projects', 'TOD MENA');
-            const platformDir = path.join(projectDir, platform.toLowerCase());
+            const platformDir = path.join(projectDir, validPlatform);
             fs.mkdirSync(platformDir, { recursive: true });
             
             const finalPath = path.join(platformDir, originalFileName);
-            fs.copyFileSync(reassembledPath, finalPath);
+            
+            // Copy file with error handling
+            if (fs.existsSync(reassembledPath)) {
+                fs.copyFileSync(reassembledPath, finalPath);
+                console.log(`File copied to final location: ${finalPath}`);
+            } else {
+                throw new Error(`Reassembled file not found: ${reassembledPath}`);
+            }
             
             // Add to project
             const projectsFile = path.join(__dirname, 'data', 'projects.json');
