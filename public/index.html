@@ -1645,6 +1645,17 @@
                         return;
                     }
                 }
+                
+                // Check file size and show warning for large files
+                const fileSizeMB = file.size / (1024 * 1024);
+                if (fileSizeMB > 20) {
+                    const shouldContinue = confirm(`Large file detected (${fileSizeMB.toFixed(2)} MB). This file will be automatically split into smaller parts for upload. Continue?`);
+                    if (!shouldContinue) {
+                        submitButton.innerHTML = originalContent;
+                        submitButton.disabled = false;
+                        return;
+                    }
+                }
             }
             
             const projectId = document.getElementById('projectIdInput').value;
@@ -1655,7 +1666,7 @@
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => {
                     controller.abort();
-                }, 30 * 60 * 1000); // 30 minutes timeout
+                }, 60 * 60 * 1000); // 60 minutes timeout for large files
 
                 const response = await fetch(`${CONFIG.baseUrl}/api/upload`, {
                     method: 'POST',
@@ -1697,6 +1708,14 @@
                                     console.log(`File size: ${(data.fileSize / 1024 / 1024).toFixed(2)} MB`);
                                 }
                                 
+                                if (data.type === 'info') {
+                                    console.log(data.message);
+                                    const progressText = submitButton.querySelector('.progress-text');
+                                    if (progressText) {
+                                        progressText.textContent = data.message;
+                                    }
+                                }
+                                
                                 if (data.type === 'progress' && data.progress) {
                                     // Update progress text
                                     const progressText = submitButton.querySelector('.progress-text');
@@ -1708,7 +1727,11 @@
                                 }
                                 
                                 if (data.type === 'complete' && data.success) {
-                                    showNotification('File uploaded successfully', 'success');
+                                    if (data.totalParts && data.totalParts > 1) {
+                                        showNotification(`Large file successfully uploaded in ${data.totalParts} parts`, 'success');
+                                    } else {
+                                        showNotification('File uploaded successfully', 'success');
+                                    }
                                     closeModal('uploadModal');
                                     showAllApps();
                                     submitButton.innerHTML = originalContent;

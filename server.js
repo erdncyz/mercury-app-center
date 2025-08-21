@@ -11,6 +11,14 @@ const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
+// Function to calculate MD5 hash
+function calculateMD5(filePath) {
+    const fileBuffer = fs.readFileSync(filePath);
+    const hashSum = crypto.createHash('md5');
+    hashSum.update(fileBuffer);
+    return hashSum.digest('hex');
+}
+
 const app = express();
 
 app.use(session({
@@ -209,17 +217,35 @@ async function handleLargeFileUpload(req, res, metadata) {
             res.write(`data: ${JSON.stringify({ type: 'progress', progress, message: `Uploaded part ${i + 1}/${totalChunks}` })}\n\n`);
         }
         
+        // Verify file integrity (optional but recommended)
+        const originalSize = file.size;
+        let totalUploadedSize = 0;
+        
+        // Calculate original file MD5
+        const originalMD5 = calculateMD5(file.path);
+        
+        for (const part of uploadedParts) {
+            const partPath = path.join(__dirname, 'uploads', 'projects', 'TOD MENA', platform.toLowerCase(), part.file);
+            if (fs.existsSync(partPath)) {
+                totalUploadedSize += fs.statSync(partPath).size;
+            }
+        }
+        
         // Clean up
         fs.rmSync(tempDir, { recursive: true, force: true });
         fs.unlinkSync(file.path); // Remove original temp file
         
-        // Send completion message
+        // Send completion message with integrity check
         res.write(`data: ${JSON.stringify({ 
             type: 'complete', 
             success: true, 
-            message: `Large file successfully split and uploaded in ${totalChunks} parts`,
+            message: `Large file successfully split and uploaded in ${totalChunks} parts (Original: ${(originalSize / 1024 / 1024).toFixed(2)}MB, Uploaded: ${(totalUploadedSize / 1024 / 1024).toFixed(2)}MB) - MD5: ${originalMD5}`,
             parts: uploadedParts,
-            totalParts: totalChunks
+            totalParts: totalChunks,
+            originalSize: originalSize,
+            uploadedSize: totalUploadedSize,
+            integrityCheck: originalSize === totalUploadedSize,
+            md5Hash: originalMD5
         })}\n\n`);
         
         res.end();
