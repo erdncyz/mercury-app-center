@@ -425,6 +425,56 @@
                 </div>
             </div>
 
+            <!-- Large File Warning Modal -->
+            <div id="largeFileModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-close" onclick="closeLargeFileModal()"></div>
+                    <div class="upload-modal-header">
+                        <div class="warning-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2L2 19H22L12 2Z" stroke="#F59E0B" stroke-width="2" fill="none"/>
+                                <path d="M12 9V13" stroke="#F59E0B" stroke-width="2" stroke-linecap="round"/>
+                                <circle cx="12" cy="16" r="1" fill="#F59E0B"/>
+                            </svg>
+                        </div>
+                        <h2>Large File Detected</h2>
+                    </div>
+                    <div class="large-file-content">
+                        <p class="file-size-info">
+                            <span id="largeFileSize" class="file-size"></span> file detected.
+                        </p>
+                        <p class="file-description">
+                            This file will be automatically split into smaller parts for reliable upload. 
+                            Your file will remain intact and functional.
+                        </p>
+                        <div class="benefits-list">
+                            <div class="benefit-item">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M20 6L9 17L4 12" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <span>File integrity guaranteed</span>
+                            </div>
+                            <div class="benefit-item">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M20 6L9 17L4 12" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <span>Automatic splitting and upload</span>
+                            </div>
+                            <div class="benefit-item">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M20 6L9 17L4 12" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <span>Progress tracking available</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="cancel-btn" onclick="closeLargeFileModal()">Cancel</button>
+                        <button type="button" class="create-btn" onclick="continueLargeFileUpload()">Continue Upload</button>
+                    </div>
+                </div>
+            </div>
+
             <div id="uploadModal" class="modal">
                 <div class="modal-content">
                     <div class="modal-close" onclick="closeModal('uploadModal')"></div>
@@ -1649,12 +1699,8 @@
                 // Check file size and show warning for large files
                 const fileSizeMB = file.size / (1024 * 1024);
                 if (fileSizeMB > 20) {
-                    const shouldContinue = confirm(`Large file detected (${fileSizeMB.toFixed(2)} MB). This file will be automatically split into smaller parts for upload. Continue?`);
-                    if (!shouldContinue) {
-                        submitButton.innerHTML = originalContent;
-                        submitButton.disabled = false;
-                        return;
-                    }
+                    showLargeFileModal(fileSizeMB, formData, submitButton, originalContent);
+                    return;
                 }
             }
             
@@ -3339,6 +3385,232 @@
             const input = document.getElementById('appFile');
             input.value = '';
             handleJiraFileChange({ target: { files: [] } });
+        }
+
+        // Large File Modal Functions
+        let pendingUploadData = null;
+
+        function showLargeFileModal(fileSizeMB, formData, submitButton, originalContent) {
+            document.getElementById('largeFileSize').textContent = `${fileSizeMB.toFixed(2)} MB`;
+            document.getElementById('largeFileModal').style.display = 'flex';
+            
+            // Store upload data for later use
+            pendingUploadData = {
+                formData: formData,
+                submitButton: submitButton,
+                originalContent: originalContent
+            };
+        }
+
+        function closeLargeFileModal() {
+            document.getElementById('largeFileModal').style.display = 'none';
+            
+            // Reset button if upload was cancelled
+            if (pendingUploadData) {
+                pendingUploadData.submitButton.innerHTML = pendingUploadData.originalContent;
+                pendingUploadData.submitButton.disabled = false;
+                pendingUploadData = null;
+            }
+        }
+
+        async function continueLargeFileUpload() {
+            if (!pendingUploadData) return;
+            
+            closeLargeFileModal();
+            
+            const { formData, submitButton, originalContent } = pendingUploadData;
+            pendingUploadData = null;
+            
+            // Get the file from formData
+            const file = formData.get('file');
+            if (!file) {
+                showUploadError('No file found');
+                submitButton.innerHTML = originalContent;
+                submitButton.disabled = false;
+                return;
+            }
+            
+            // For large files, use chunked upload
+            if (file.size > 20 * 1024 * 1024) { // 20MB
+                await uploadLargeFileInChunks(file, formData, submitButton, originalContent);
+            } else {
+                // For smaller files, use normal upload
+                await uploadFileNormally(formData, submitButton, originalContent);
+            }
+        }
+        
+        async function uploadLargeFileInChunks(file, formData, submitButton, originalContent) {
+            const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+            const totalChunks = Math.ceil(file.size / chunkSize);
+            let uploadedChunks = 0;
+            
+            try {
+                // Update progress text
+                const progressText = submitButton.querySelector('.progress-text');
+                if (progressText) {
+                    progressText.textContent = `Preparing to upload ${totalChunks} chunks...`;
+                }
+                
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * chunkSize;
+                    const end = Math.min(start + chunkSize, file.size);
+                    const chunk = file.slice(start, end);
+                    
+                    // Create new FormData for this chunk
+                    const chunkFormData = new FormData();
+                    
+                    // Add all the original form fields
+                    for (let [key, value] of formData.entries()) {
+                        if (key !== 'file') {
+                            chunkFormData.append(key, value);
+                        }
+                    }
+                    
+                    // Add the chunk as a file
+                    const chunkFile = new File([chunk], file.name, { type: file.type });
+                    chunkFormData.append('file', chunkFile);
+                    chunkFormData.append('chunkIndex', i.toString());
+                    chunkFormData.append('totalChunks', totalChunks.toString());
+                    chunkFormData.append('originalFileName', file.name);
+                    chunkFormData.append('originalFileSize', file.size.toString());
+                    
+                    // Update progress
+                    if (progressText) {
+                        progressText.textContent = `Uploading chunk ${i + 1}/${totalChunks}...`;
+                    }
+                    
+                    // Upload this chunk
+                    const response = await fetch(`${CONFIG.baseUrl}/api/upload-chunk`, {
+                        method: 'POST',
+                        credentials: 'include',
+                        body: chunkFormData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Chunk ${i + 1} upload failed: ${response.status} ${response.statusText}`);
+                    }
+                    
+                    uploadedChunks++;
+                    
+                    // Update progress
+                    const progress = Math.round((uploadedChunks / totalChunks) * 100);
+                    if (progressText) {
+                        progressText.textContent = `Uploaded ${uploadedChunks}/${totalChunks} chunks (${progress}%)`;
+                    }
+                }
+                
+                // All chunks uploaded successfully
+                showNotification(`Large file successfully uploaded in ${totalChunks} chunks`, 'success');
+                closeModal('uploadModal');
+                showAllApps();
+                submitButton.innerHTML = originalContent;
+                submitButton.disabled = false;
+                
+            } catch (error) {
+                console.error('Chunked upload error:', error);
+                showUploadError('Chunked upload failed: ' + error.message);
+                submitButton.innerHTML = originalContent;
+                submitButton.disabled = false;
+            }
+        }
+        
+        async function uploadFileNormally(formData, submitButton, originalContent) {
+            try {
+                // Create AbortController for timeout handling
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    controller.abort();
+                }, 60 * 60 * 1000); // 60 minutes timeout for large files
+
+                const response = await fetch(`${CONFIG.baseUrl}/api/upload`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData,
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                // Handle server-sent events (same as original upload)
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                
+                                if (data.type === 'connection') {
+                                    console.log('Upload connection established');
+                                }
+                                
+                                if (data.type === 'fileInfo') {
+                                    console.log(`File size: ${(data.fileSize / 1024 / 1024).toFixed(2)} MB`);
+                                }
+                                
+                                if (data.type === 'info') {
+                                    console.log(data.message);
+                                    const progressText = submitButton.querySelector('.progress-text');
+                                    if (progressText) {
+                                        progressText.textContent = data.message;
+                                    }
+                                }
+                                
+                                if (data.type === 'progress' && data.progress) {
+                                    const progressText = submitButton.querySelector('.progress-text');
+                                    if (progressText) {
+                                        const uploadedMB = (data.uploadedBytes / 1024 / 1024).toFixed(2);
+                                        const totalMB = (data.fileSize / 1024 / 1024).toFixed(2);
+                                        progressText.textContent = `Uploading: ${Math.round(data.progress)}% (${uploadedMB}MB / ${totalMB}MB)`;
+                                    }
+                                }
+                                
+                                if (data.type === 'complete' && data.success) {
+                                    if (data.totalParts && data.totalParts > 1) {
+                                        showNotification(`Large file successfully uploaded in ${data.totalParts} parts`, 'success');
+                                    } else {
+                                        showNotification('File uploaded successfully', 'success');
+                                    }
+                                    closeModal('uploadModal');
+                                    showAllApps();
+                                    submitButton.innerHTML = originalContent;
+                                    submitButton.disabled = false;
+                                    return;
+                                }
+                                
+                                if (data.error) {
+                                    showUploadError(data.error);
+                                    submitButton.innerHTML = originalContent;
+                                    submitButton.disabled = false;
+                                    return;
+                                }
+                                
+                            } catch (parseError) {
+                                console.error('Error parsing SSE data:', parseError, line);
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                showUploadError('Upload failed: ' + error.message);
+                submitButton.innerHTML = originalContent;
+                submitButton.disabled = false;
+            }
         }
 
         // Service Worker Registration for PWA

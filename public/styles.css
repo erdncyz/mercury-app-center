@@ -83,6 +83,68 @@ body[data-theme='dark'] .modal-actions button.cancel-btn {
     border: 1px solid var(--border-color);
 }
 
+/* Large File Modal Styles */
+.warning-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.large-file-content {
+    margin: 1.5rem 0;
+}
+
+.file-size-info {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+}
+
+.file-size {
+    font-weight: bold;
+    color: #F59E0B;
+}
+
+.file-description {
+    color: var(--text-color);
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+
+.benefits-list {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.benefit-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.benefit-item:last-child {
+    margin-bottom: 0;
+}
+
+.benefit-item svg {
+    margin-right: 0.5rem;
+    flex-shrink: 0;
+}
+
+body[data-theme='dark'] .benefits-list {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+body[data-theme='dark'] .file-size {
+    color: #F59E0B;
+}
+
 body[data-theme='dark'] input:-webkit-autofill,
 body[data-theme='dark'] input:-webkit-autofill:focus,
 body[data-theme='dark'] input:-webkit-autofill:hover,

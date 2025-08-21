@@ -122,6 +122,9 @@ app.use((req, res, next) => {
 app.use(bodyParser.json({ limit: '1gb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '1gb' }));
 
+// Chunk storage for reassembly
+const chunkStorage = new Map();
+
 // Helper function to read JSON data files safely
 function readJsonFile(filePath) {
     try {
@@ -1266,6 +1269,133 @@ app.delete('/api/keys/:keyId', isAdmin, (req, res) => {
     } catch (error) {
         console.error('Error deleting API key:', error);
         res.status(500).json({ error: 'Failed to delete API key' });
+    }
+});
+
+// Chunk upload endpoint
+app.post('/api/upload-chunk', upload.single('file'), (req, res) => {
+    try {
+        const { chunkIndex, totalChunks, originalFileName, originalFileSize } = req.body;
+        const { projectId, platform, version, buildNumber, notes, environment } = req.body;
+        
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No file uploaded' });
+        }
+        
+        if (!chunkIndex || !totalChunks || !originalFileName || !originalFileSize) {
+            return res.status(400).json({ success: false, error: 'Missing chunk information' });
+        }
+        
+        const chunkKey = `${originalFileName}-${originalFileSize}`;
+        
+        // Initialize chunk storage if not exists
+        if (!chunkStorage.has(chunkKey)) {
+            chunkStorage.set(chunkKey, {
+                chunks: new Array(parseInt(totalChunks)),
+                metadata: { projectId, platform, version, buildNumber, notes, environment },
+                originalFileName,
+                originalFileSize: parseInt(originalFileSize)
+            });
+        }
+        
+        const fileInfo = chunkStorage.get(chunkKey);
+        
+        // Store this chunk
+        fileInfo.chunks[parseInt(chunkIndex)] = req.file.path;
+        
+        // Check if all chunks are received
+        const receivedChunks = fileInfo.chunks.filter(chunk => chunk !== undefined).length;
+        
+        if (receivedChunks === parseInt(totalChunks)) {
+            // All chunks received, reassemble the file
+            const tempDir = path.join(__dirname, 'uploads', 'temp', 'chunks', Date.now().toString());
+            fs.mkdirSync(tempDir, { recursive: true });
+            
+            const reassembledPath = path.join(tempDir, originalFileName);
+            const writeStream = fs.createWriteStream(reassembledPath);
+            
+            // Write chunks in order
+            for (let i = 0; i < fileInfo.chunks.length; i++) {
+                const chunkPath = fileInfo.chunks[i];
+                const chunkData = fs.readFileSync(chunkPath);
+                writeStream.write(chunkData);
+                
+                // Clean up chunk file
+                fs.unlinkSync(chunkPath);
+            }
+            
+            writeStream.end();
+            
+            // Create a mock req.file object for the reassembled file
+            const reassembledFile = {
+                originalname: originalFileName,
+                path: reassembledPath,
+                size: parseInt(originalFileSize)
+            };
+            
+            // Process the reassembled file using existing logic
+            const { projectId, platform, version, buildNumber, notes, environment } = fileInfo.metadata;
+            
+            // Create version object
+            const newVersion = {
+                id: Date.now().toString(),
+                platform: platform.toLowerCase(),
+                version: version,
+                buildNumber: buildNumber || '',
+                environment: environment,
+                notes: notes || '',
+                file: originalFileName,
+                uploadedBy: req.session.username,
+                uploadedAt: new Date().toISOString()
+            };
+            
+            // Move file to final location
+            const projectDir = path.join(__dirname, 'uploads', 'projects', 'TOD MENA');
+            const platformDir = path.join(projectDir, platform.toLowerCase());
+            fs.mkdirSync(platformDir, { recursive: true });
+            
+            const finalPath = path.join(platformDir, originalFileName);
+            fs.copyFileSync(reassembledPath, finalPath);
+            
+            // Add to project
+            const projectsFile = path.join(__dirname, 'data', 'projects.json');
+            let data = readJsonFile(projectsFile);
+            const project = data.projects.find(p => p.id === projectId);
+            
+            if (project) {
+                if (!Array.isArray(project.versions)) {
+                    project.versions = [];
+                }
+                project.versions.unshift(newVersion);
+                writeJsonFile(projectsFile, data);
+            }
+            
+            // Clean up
+            fs.rmSync(tempDir, { recursive: true, force: true });
+            chunkStorage.delete(chunkKey);
+            
+            res.json({ 
+                success: true, 
+                message: `File reassembled and uploaded successfully from ${totalChunks} chunks`,
+                chunkIndex: parseInt(chunkIndex),
+                totalChunks: parseInt(totalChunks),
+                isComplete: true
+            });
+            
+        } else {
+            // Chunk received, waiting for more
+            res.json({ 
+                success: true, 
+                message: `Chunk ${parseInt(chunkIndex) + 1}/${totalChunks} uploaded successfully`,
+                chunkIndex: parseInt(chunkIndex),
+                totalChunks: parseInt(totalChunks),
+                isComplete: false
+            });
+        }
+        
+    } catch (error) {
+        console.error('Chunk upload error:', error);
+        res.status(500).json({ success: false, error: 'Failed to process chunk' });
     }
 });
 
