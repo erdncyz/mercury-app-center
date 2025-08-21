@@ -725,7 +725,9 @@
             baseUrl: `http://${location.hostname}:${location.port || 80}`
         };
 
+        // Global variables
         let currentEditingUserId = null; // Moved declaration here
+        let pendingUploadData = null; // For large file upload modal
         let currentPage = 1;
         const itemsPerPage = 10;
         let allVersions = [];
@@ -3388,8 +3390,6 @@
         }
 
         // Large File Modal Functions
-        let pendingUploadData = null;
-
         function showLargeFileModal(fileSizeMB, formData, submitButton, originalContent) {
             document.getElementById('largeFileSize').textContent = `${fileSizeMB.toFixed(2)} MB`;
             document.getElementById('largeFileModal').style.display = 'flex';
