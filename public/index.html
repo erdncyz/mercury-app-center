@@ -3519,9 +3519,10 @@
         }
         
         async function uploadLargeFileInChunks(file, formData, submitButton, originalContent) {
-            const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+            const chunkSize = 2 * 1024 * 1024; // 2MB chunks (daha küçük)
             const totalChunks = Math.ceil(file.size / chunkSize);
             let uploadedChunks = 0;
+            const maxRetries = 3; // Her chunk için 3 deneme
             
             try {
                 // Update progress text
@@ -3563,15 +3564,42 @@
                     }
                     submitButton.innerHTML = `<span class="spinner"></span><span class="progress-text">Uploading chunk ${i + 1}/${totalChunks} (${chunkProgress}%)</span>`;
                     
-                    // Upload this chunk
-                    const response = await fetch(`${CONFIG.baseUrl}/api/upload-chunk`, {
-                        method: 'POST',
-                        credentials: 'include',
-                        body: chunkFormData
-                    });
+                    // Upload this chunk with retry mechanism
+                    let retryCount = 0;
+                    let chunkUploaded = false;
                     
-                    if (!response.ok) {
-                        throw new Error(`Chunk ${i + 1} upload failed: ${response.status} ${response.statusText}`);
+                    while (retryCount < maxRetries && !chunkUploaded) {
+                        try {
+                            const response = await fetch(`${CONFIG.baseUrl}/api/upload-chunk`, {
+                                method: 'POST',
+                                credentials: 'include',
+                                body: chunkFormData,
+                                signal: AbortSignal.timeout(30000) // 30 second timeout per chunk
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error(`Chunk ${i + 1} upload failed: ${response.status} ${response.statusText}`);
+                            }
+                            
+                            chunkUploaded = true;
+                            
+                        } catch (error) {
+                            retryCount++;
+                            console.log(`Chunk ${i + 1} upload failed (attempt ${retryCount}/${maxRetries}):`, error.message);
+                            
+                            if (retryCount < maxRetries) {
+                                // Wait before retry (exponential backoff)
+                                const waitTime = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
+                                if (progressText) {
+                                    progressText.textContent = `Retrying chunk ${i + 1}/${totalChunks} (attempt ${retryCount + 1}/${maxRetries})...`;
+                                }
+                                submitButton.innerHTML = `<span class="spinner"></span><span class="progress-text">Retrying chunk ${i + 1}/${totalChunks} (attempt ${retryCount + 1}/${maxRetries})...</span>`;
+                                
+                                await new Promise(resolve => setTimeout(resolve, waitTime));
+                            } else {
+                                throw new Error(`Chunk ${i + 1} upload failed after ${maxRetries} attempts: ${error.message}`);
+                            }
+                        }
                     }
                     
                     uploadedChunks++;

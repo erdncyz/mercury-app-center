@@ -1272,8 +1272,29 @@ app.delete('/api/keys/:keyId', isAdmin, (req, res) => {
     }
 });
 
-// Chunk upload endpoint
-app.post('/api/upload-chunk', upload.single('file'), async (req, res) => {
+// Chunk upload endpoint with smaller limits
+const chunkUpload = multer({
+    storage: multer.diskStorage({
+        destination: function (req, file, cb) {
+            const uploadDir = path.join(__dirname, 'uploads', 'temp');
+            fs.mkdirSync(uploadDir, { recursive: true });
+            cb(null, uploadDir);
+        },
+        filename: function (req, file, cb) {
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+        }
+    }),
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit for chunks
+        fieldSize: 10 * 1024 * 1024, // 10MB field size
+        fields: 10, // Max 10 fields
+        files: 1, // Max 1 file
+        parts: 20 // Max 20 parts
+    }
+});
+
+app.post('/api/upload-chunk', chunkUpload.single('file'), async (req, res) => {
     try {
         const { chunkIndex, totalChunks, originalFileName, originalFileSize } = req.body;
         const { projectId, platform, version, buildNumber, notes, environment } = req.body;
