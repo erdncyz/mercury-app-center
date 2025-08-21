@@ -92,8 +92,22 @@ const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: 2 * 1024 * 1024 * 1024 // 2GB limit
+        fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit
+        fieldSize: 10 * 1024 * 1024, // 10MB field size
+        fields: 10, // Max 10 fields
+        files: 1, // Max 1 file
+        parts: 20 // Max 20 parts
     }
+});
+
+// Increase server timeout for large uploads
+app.use((req, res, next) => {
+    // Set timeout to 30 minutes for upload requests
+    if (req.path === '/api/upload' || req.path === '/api/external/upload') {
+        req.setTimeout(30 * 60 * 1000); // 30 minutes
+        res.setTimeout(30 * 60 * 1000); // 30 minutes
+    }
+    next();
 });
 
 // Helper function to read JSON data files safely
@@ -229,6 +243,10 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Transfer-Encoding', 'chunked');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+    // Send initial connection established message
+    res.write(`data: ${JSON.stringify({ type: 'connection', message: 'Upload started' })}\n\n`);
 
     try {
         const { projectId, platform, version, buildNumber, notes, environment, url } = req.body;
@@ -309,45 +327,69 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
             // Copy the file with progress tracking and optimized streaming
             const filePath = path.join(platformDir, fileName);
             const readStream = fs.createReadStream(req.file.path, {
-                highWaterMark: 1024 * 1024 // 1MB chunks for better performance
+                highWaterMark: 64 * 1024 // 64KB chunks for better memory management
             });
             const writeStream = fs.createWriteStream(filePath, {
-                highWaterMark: 1024 * 1024 // 1MB chunks for better performance
+                highWaterMark: 64 * 1024 // 64KB chunks for better memory management
             });
             const fileSize = fs.statSync(req.file.path).size;
             let uploadedBytes = 0;
             let lastProgressUpdate = 0;
 
+            // Send file size info
+            res.write(`data: ${JSON.stringify({ type: 'fileInfo', fileSize, fileName })}\n\n`);
+
             // Set up error handling for both streams
             readStream.on('error', (error) => {
                 console.error('Read stream error:', error);
-                fs.unlinkSync(req.file.path); // Clean up temp file
-                res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to read file' })}\n\n`);
+                try {
+                    if (fs.existsSync(req.file.path)) {
+                        fs.unlinkSync(req.file.path); // Clean up temp file
+                    }
+                } catch (cleanupError) {
+                    console.error('Cleanup error:', cleanupError);
+                }
+                res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to read file: ' + error.message })}\n\n`);
                 res.end();
             });
 
             writeStream.on('error', (error) => {
                 console.error('Write stream error:', error);
-                fs.unlinkSync(req.file.path); // Clean up temp file
-                res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to write file' })}\n\n`);
+                try {
+                    if (fs.existsSync(req.file.path)) {
+                        fs.unlinkSync(req.file.path); // Clean up temp file
+                    }
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath); // Clean up destination file
+                    }
+                } catch (cleanupError) {
+                    console.error('Cleanup error:', cleanupError);
+                }
+                res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to write file: ' + error.message })}\n\n`);
                 res.end();
             });
 
             // Track progress with throttling
             readStream.on('data', (chunk) => {
                 uploadedBytes += chunk.length;
-                const progress = (uploadedBytes / fileSize) * 100;
+                const progress = Math.round((uploadedBytes / fileSize) * 100);
                 
-                // Only send progress updates every 1% to reduce overhead
-                if (progress - lastProgressUpdate >= 1) {
-                    res.write(`data: ${JSON.stringify({ progress })}\n\n`);
+                // Only send progress updates every 2% to reduce overhead
+                if (progress - lastProgressUpdate >= 2) {
+                    res.write(`data: ${JSON.stringify({ type: 'progress', progress, uploadedBytes, fileSize })}\n\n`);
                     lastProgressUpdate = progress;
                 }
             });
 
             // Handle successful completion
             writeStream.on('finish', () => {
-                fs.unlinkSync(req.file.path); // Delete temporary file
+                try {
+                    if (fs.existsSync(req.file.path)) {
+                        fs.unlinkSync(req.file.path); // Delete temporary file
+                    }
+                } catch (cleanupError) {
+                    console.error('Cleanup error:', cleanupError);
+                }
                 
                 newVersion = {
                     id: Date.now().toString(),
@@ -370,7 +412,7 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
                 
                 writeJsonFile(projectsFile, data);
                 
-                res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
+                res.write(`data: ${JSON.stringify({ type: 'complete', success: true, version: newVersion })}\n\n`);
                 res.end();
             });
 
@@ -386,20 +428,24 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
         }
 
         // Send a dummy progress event for frontend compatibility
-        res.write(`data: ${JSON.stringify({ progress: 10 })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'progress', progress: 100 })}\n\n`);
 
         project.versions.push(newVersion);
         project.versions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
         
         writeJsonFile(projectsFile, data);
         
-        res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'complete', success: true, version: newVersion })}\n\n`);
         res.end();
 
     } catch (error) {
         // In case of error, clean up the temporary file
-        if (req.file && req.file.path) {
-            fs.unlinkSync(req.file.path);
+        if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (cleanupError) {
+                console.error('Cleanup error:', cleanupError);
+            }
         }
         console.error('Upload error:', error);
         res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to upload file: ' + error.message })}\n\n`);
