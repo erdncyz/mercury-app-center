@@ -469,7 +469,7 @@
                         </div>
                     </div>
                     <div class="modal-actions">
-                        <button type="button" class="cancel-btn" onclick="closeLargeFileModal()">Cancel</button>
+                        <button type="button" class="cancel-btn" onclick="cancelLargeFileUpload()">Cancel</button>
                         <button type="button" class="create-btn" onclick="continueLargeFileUpload()">Continue Upload</button>
                     </div>
                 </div>
@@ -3354,11 +3354,27 @@
             document.querySelectorAll('.modal').forEach(modal => {
                 modal.addEventListener('mousedown', function(e) {
                     if (e.target === modal) {
-                        modal.style.display = 'none';
+                        if (modal.id === 'largeFileModal') {
+                            cancelLargeFileUpload();
+                        } else {
+                            modal.style.display = 'none';
+                        }
                     }
                 });
             });
         }
+
+        // ESC tuşu ile modal kapatma
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const largeFileModal = document.getElementById('largeFileModal');
+                if (largeFileModal && largeFileModal.style.display === 'flex') {
+                    cancelLargeFileUpload();
+                } else {
+                    closeAllModals();
+                }
+            }
+        });
 
         function handleJiraDrop(event) {
             event.preventDefault();
@@ -3377,6 +3393,20 @@
                 infoDiv.innerHTML = `<div class='jira-file-row'><span class='jira-file-name'>${file.name}</span> <span class='jira-file-size'>(${size})</span> <button type='button' class='jira-remove-btn' onclick='removeJiraFile()'>Remove</button></div>`;
                 infoDiv.style.display = '';
                 document.getElementById('jiraUploadText').style.display = 'none';
+                
+                // Check if file is large (>20MB) and show modal immediately
+                const fileSizeMB = file.size / (1024 * 1024);
+                if (fileSizeMB > 20) {
+                    // Show large file modal immediately
+                    document.getElementById('largeFileSize').textContent = `${fileSizeMB.toFixed(2)} MB`;
+                    document.getElementById('largeFileModal').style.display = 'flex';
+                    
+                    // Store file info for later use
+                    pendingUploadData = {
+                        file: file,
+                        fileSizeMB: fileSizeMB
+                    };
+                }
             } else {
                 infoDiv.innerHTML = '';
                 infoDiv.style.display = 'none';
@@ -3387,6 +3417,12 @@
             const input = document.getElementById('appFile');
             input.value = '';
             handleJiraFileChange({ target: { files: [] } });
+            
+            // Close large file modal if it's open
+            const largeFileModal = document.getElementById('largeFileModal');
+            if (largeFileModal && largeFileModal.style.display === 'flex') {
+                cancelLargeFileUpload();
+            }
         }
 
         // Large File Modal Functions
@@ -3413,29 +3449,70 @@
             }
         }
 
+        function cancelLargeFileUpload() {
+            // Clear any pending upload data
+            if (pendingUploadData) {
+                pendingUploadData.submitButton.innerHTML = pendingUploadData.originalContent;
+                pendingUploadData.submitButton.disabled = false;
+                pendingUploadData = null;
+            }
+            
+            // Close the modal
+            document.getElementById('largeFileModal').style.display = 'none';
+            
+            // Show cancellation message
+            showNotification('Large file upload cancelled', 'info');
+        }
+
         async function continueLargeFileUpload() {
             if (!pendingUploadData) return;
             
             closeLargeFileModal();
             
-            const { formData, submitButton, originalContent } = pendingUploadData;
-            pendingUploadData = null;
-            
-            // Get the file from formData
-            const file = formData.get('file');
-            if (!file) {
-                showUploadError('No file found');
-                submitButton.innerHTML = originalContent;
-                submitButton.disabled = false;
-                return;
-            }
-            
-            // For large files, use chunked upload
-            if (file.size > 20 * 1024 * 1024) { // 20MB
-                await uploadLargeFileInChunks(file, formData, submitButton, originalContent);
+            // Check if we have file data from immediate selection
+            if (pendingUploadData.file) {
+                const file = pendingUploadData.file;
+                const fileSizeMB = pendingUploadData.fileSizeMB;
+                
+                // Create FormData from the form
+                const form = document.getElementById('uploadForm');
+                const formData = new FormData(form);
+                
+                // Get submit button
+                const submitButton = form.querySelector('button[type="submit"]');
+                const originalContent = submitButton.innerHTML;
+                
+                // Clear pending data
+                pendingUploadData = null;
+                
+                // For large files, use chunked upload
+                if (fileSizeMB > 20) {
+                    await uploadLargeFileInChunks(file, formData, submitButton, originalContent);
+                } else {
+                    // For smaller files, use normal upload
+                    await uploadFileNormally(formData, submitButton, originalContent);
+                }
             } else {
-                // For smaller files, use normal upload
-                await uploadFileNormally(formData, submitButton, originalContent);
+                // Original logic for when called from upload button
+                const { formData, submitButton, originalContent } = pendingUploadData;
+                pendingUploadData = null;
+                
+                // Get the file from formData
+                const file = formData.get('file');
+                if (!file) {
+                    showUploadError('No file found');
+                    submitButton.innerHTML = originalContent;
+                    submitButton.disabled = false;
+                    return;
+                }
+                
+                // For large files, use chunked upload
+                if (file.size > 20 * 1024 * 1024) { // 20MB
+                    await uploadLargeFileInChunks(file, formData, submitButton, originalContent);
+                } else {
+                    // For smaller files, use normal upload
+                    await uploadFileNormally(formData, submitButton, originalContent);
+                }
             }
         }
         
