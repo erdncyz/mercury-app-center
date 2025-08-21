@@ -93,22 +93,26 @@ const upload = multer({
     fileFilter: fileFilter,
     limits: {
         fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit
-        fieldSize: 10 * 1024 * 1024, // 10MB field size
+        fieldSize: 100 * 1024 * 1024, // 100MB field size
         fields: 10, // Max 10 fields
         files: 1, // Max 1 file
-        parts: 20 // Max 20 parts
+        parts: 50 // Max 50 parts
     }
 });
 
 // Increase server timeout for large uploads
 app.use((req, res, next) => {
-    // Set timeout to 30 minutes for upload requests
+    // Set timeout to 60 minutes for upload requests
     if (req.path === '/api/upload' || req.path === '/api/external/upload') {
-        req.setTimeout(30 * 60 * 1000); // 30 minutes
-        res.setTimeout(30 * 60 * 1000); // 30 minutes
+        req.setTimeout(60 * 60 * 1000); // 60 minutes
+        res.setTimeout(60 * 60 * 1000); // 60 minutes
     }
     next();
 });
+
+// Increase body parser limits for large uploads
+app.use(bodyParser.json({ limit: '1gb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '1gb' }));
 
 // Helper function to read JSON data files safely
 function readJsonFile(filePath) {
@@ -1556,3 +1560,5 @@ app.post('/api/submit', async (req, res) => {
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
+
+
