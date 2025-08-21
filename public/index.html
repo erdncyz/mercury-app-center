@@ -3451,6 +3451,9 @@
                     progressText.textContent = `Preparing to upload ${totalChunks} chunks...`;
                 }
                 
+                // Update button text to show progress
+                submitButton.innerHTML = `<span class="spinner"></span><span class="progress-text">Preparing to upload ${totalChunks} chunks...</span>`;
+                
                 for (let i = 0; i < totalChunks; i++) {
                     const start = i * chunkSize;
                     const end = Math.min(start + chunkSize, file.size);
@@ -3475,9 +3478,11 @@
                     chunkFormData.append('originalFileSize', file.size.toString());
                     
                     // Update progress
+                    const chunkProgress = Math.round(((i + 1) / totalChunks) * 100);
                     if (progressText) {
-                        progressText.textContent = `Uploading chunk ${i + 1}/${totalChunks}...`;
+                        progressText.textContent = `Uploading chunk ${i + 1}/${totalChunks} (${chunkProgress}%)`;
                     }
+                    submitButton.innerHTML = `<span class="spinner"></span><span class="progress-text">Uploading chunk ${i + 1}/${totalChunks} (${chunkProgress}%)</span>`;
                     
                     // Upload this chunk
                     const response = await fetch(`${CONFIG.baseUrl}/api/upload-chunk`, {
@@ -3493,13 +3498,15 @@
                     uploadedChunks++;
                     
                     // Update progress
-                    const progress = Math.round((uploadedChunks / totalChunks) * 100);
+                    const totalProgress = Math.round((uploadedChunks / totalChunks) * 100);
                     if (progressText) {
-                        progressText.textContent = `Uploaded ${uploadedChunks}/${totalChunks} chunks (${progress}%)`;
+                        progressText.textContent = `Uploaded ${uploadedChunks}/${totalChunks} chunks (${totalProgress}%)`;
                     }
+                    submitButton.innerHTML = `<span class="spinner"></span><span class="progress-text">Uploaded ${uploadedChunks}/${totalChunks} chunks (${totalProgress}%)</span>`;
                 }
                 
                 // All chunks uploaded successfully
+                submitButton.innerHTML = `<span class="spinner"></span><span class="progress-text">Finalizing upload...</span>`;
                 showNotification(`Large file successfully uploaded in ${totalChunks} chunks`, 'success');
                 closeModal('uploadModal');
                 showAllApps();
