@@ -11,6 +11,14 @@ const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
+// Function to calculate MD5 hash
+function calculateMD5(filePath) {
+    const fileBuffer = fs.readFileSync(filePath);
+    const hashSum = crypto.createHash('md5');
+    hashSum.update(fileBuffer);
+    return hashSum.digest('hex');
+}
+
 const app = express();
 
 app.use(session({
@@ -92,9 +100,30 @@ const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: 2 * 1024 * 1024 * 1024 // 2GB limit
+        fileSize: 2 * 1024 * 1024 * 1024, // 2GB limit
+        fieldSize: 100 * 1024 * 1024, // 100MB field size
+        fields: 10, // Max 10 fields
+        files: 1, // Max 1 file
+        parts: 50 // Max 50 parts
     }
 });
+
+// Increase server timeout for large uploads
+app.use((req, res, next) => {
+    // Set timeout to 60 minutes for upload requests
+    if (req.path === '/api/upload' || req.path === '/api/external/upload') {
+        req.setTimeout(60 * 60 * 1000); // 60 minutes
+        res.setTimeout(60 * 60 * 1000); // 60 minutes
+    }
+    next();
+});
+
+// Increase body parser limits for large uploads
+app.use(bodyParser.json({ limit: '1gb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '1gb' }));
+
+// Chunk storage for reassembly
+const chunkStorage = new Map();
 
 // Helper function to read JSON data files safely
 function readJsonFile(filePath) {
@@ -121,6 +150,113 @@ function writeJsonFile(filePath, data) {
         console.error(`Error writing JSON file ${filePath}:`, error);
         // Optionally, re-throw or handle the error appropriately
         throw error; 
+    }
+}
+
+// Function to handle large file uploads by splitting them automatically
+async function handleLargeFileUpload(req, res, metadata) {
+    try {
+        const { projectId, platform, version, buildNumber, notes, environment } = metadata;
+        const file = req.file;
+        const chunkSize = 15 * 1024 * 1024; // 15MB chunks
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        
+        res.write(`data: ${JSON.stringify({ type: 'info', message: `Large file detected (${(file.size / 1024 / 1024).toFixed(2)} MB). Splitting into ${totalChunks} chunks...` })}\n\n`);
+        
+        const uploadedParts = [];
+        const tempDir = path.join(__dirname, 'uploads', 'temp', 'auto-split', Date.now().toString());
+        fs.mkdirSync(tempDir, { recursive: true });
+        
+        // Split file into chunks
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, file.size);
+            const chunkPath = path.join(tempDir, `chunk-${i}`);
+            
+            // Read chunk from uploaded file
+            const chunk = fs.readFileSync(file.path, { start, end });
+            fs.writeFileSync(chunkPath, chunk);
+            
+            // Create version for this chunk
+            const chunkVersion = `${version}-part${i + 1}`;
+            const chunkFileName = `${chunkVersion}-${path.basename(file.originalname)}`;
+            
+            // Move chunk to final location
+            const projectDir = path.join(__dirname, 'uploads', 'projects', 'TOD MENA');
+            const platformDir = path.join(projectDir, platform.toLowerCase());
+            fs.mkdirSync(platformDir, { recursive: true });
+            
+            const finalPath = path.join(platformDir, chunkFileName);
+            fs.copyFileSync(chunkPath, finalPath);
+            
+            // Create version object
+            const newVersion = {
+                id: Date.now().toString() + i,
+                platform: platform.toLowerCase(),
+                version: chunkVersion,
+                buildNumber: buildNumber ? `${buildNumber}-part${i + 1}` : '',
+                environment: environment,
+                notes: notes ? `${notes} (Part ${i + 1}/${totalChunks})` : `Auto-split part ${i + 1}/${totalChunks}`,
+                file: chunkFileName,
+                uploadedBy: req.session.username,
+                uploadedAt: new Date().toISOString()
+            };
+            
+            // Add to project
+            const projectsFile = path.join(__dirname, 'data', 'projects.json');
+            let data = readJsonFile(projectsFile);
+            const project = data.projects.find(p => p.id === projectId);
+            
+            if (project) {
+                if (!Array.isArray(project.versions)) {
+                    project.versions = [];
+                }
+                project.versions.unshift(newVersion);
+                writeJsonFile(projectsFile, data);
+                uploadedParts.push(newVersion);
+            }
+            
+            const progress = Math.round(((i + 1) / totalChunks) * 100);
+            res.write(`data: ${JSON.stringify({ type: 'progress', progress, message: `Uploaded part ${i + 1}/${totalChunks}` })}\n\n`);
+        }
+        
+        // Verify file integrity (optional but recommended)
+        const originalSize = file.size;
+        let totalUploadedSize = 0;
+        
+        // Calculate original file MD5
+        const originalMD5 = calculateMD5(file.path);
+        
+        for (const part of uploadedParts) {
+            const partPath = path.join(__dirname, 'uploads', 'projects', 'TOD MENA', platform.toLowerCase(), part.file);
+            if (fs.existsSync(partPath)) {
+                totalUploadedSize += fs.statSync(partPath).size;
+            }
+        }
+        
+        // Clean up
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        fs.unlinkSync(file.path); // Remove original temp file
+        
+        // Send completion message with integrity check
+        res.write(`data: ${JSON.stringify({ 
+            type: 'complete', 
+            success: true, 
+            message: `Large file successfully split and uploaded in ${totalChunks} parts (Original: ${(originalSize / 1024 / 1024).toFixed(2)}MB, Uploaded: ${(totalUploadedSize / 1024 / 1024).toFixed(2)}MB) - MD5: ${originalMD5}`,
+            parts: uploadedParts,
+            totalParts: totalChunks,
+            originalSize: originalSize,
+            uploadedSize: totalUploadedSize,
+            integrityCheck: originalSize === totalUploadedSize,
+            md5Hash: originalMD5
+        })}\n\n`);
+        
+        res.end();
+        
+    } catch (error) {
+        console.error('Large file upload error:', error);
+        res.write(`data: ${JSON.stringify({ type: 'error', success: false, error: 'Failed to process large file' })}\n\n`);
+        res.end();
     }
 }
 
@@ -229,9 +365,19 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('Transfer-Encoding', 'chunked');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+    // Send initial connection established message
+    res.write(`data: ${JSON.stringify({ type: 'connection', message: 'Upload started' })}\n\n`);
 
     try {
         const { projectId, platform, version, buildNumber, notes, environment, url } = req.body;
+        
+        // Check if file is provided and if it's a large file (>20MB)
+        if (req.file && req.file.size > 20 * 1024 * 1024) {
+            // Large file detected - split and upload automatically
+            return handleLargeFileUpload(req, res, { projectId, platform, version, buildNumber, notes, environment });
+        }
         
         if (!projectId || !platform || !version || !environment) {
             res.write(`data: ${JSON.stringify({ success: false, error: 'Missing required fields' })}\n\n`);
@@ -309,45 +455,69 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
             // Copy the file with progress tracking and optimized streaming
             const filePath = path.join(platformDir, fileName);
             const readStream = fs.createReadStream(req.file.path, {
-                highWaterMark: 1024 * 1024 // 1MB chunks for better performance
+                highWaterMark: 64 * 1024 // 64KB chunks for better memory management
             });
             const writeStream = fs.createWriteStream(filePath, {
-                highWaterMark: 1024 * 1024 // 1MB chunks for better performance
+                highWaterMark: 64 * 1024 // 64KB chunks for better memory management
             });
             const fileSize = fs.statSync(req.file.path).size;
             let uploadedBytes = 0;
             let lastProgressUpdate = 0;
 
+            // Send file size info
+            res.write(`data: ${JSON.stringify({ type: 'fileInfo', fileSize, fileName })}\n\n`);
+
             // Set up error handling for both streams
             readStream.on('error', (error) => {
                 console.error('Read stream error:', error);
-                fs.unlinkSync(req.file.path); // Clean up temp file
-                res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to read file' })}\n\n`);
+                try {
+                    if (fs.existsSync(req.file.path)) {
+                        fs.unlinkSync(req.file.path); // Clean up temp file
+                    }
+                } catch (cleanupError) {
+                    console.error('Cleanup error:', cleanupError);
+                }
+                res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to read file: ' + error.message })}\n\n`);
                 res.end();
             });
 
             writeStream.on('error', (error) => {
                 console.error('Write stream error:', error);
-                fs.unlinkSync(req.file.path); // Clean up temp file
-                res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to write file' })}\n\n`);
+                try {
+                    if (fs.existsSync(req.file.path)) {
+                        fs.unlinkSync(req.file.path); // Clean up temp file
+                    }
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath); // Clean up destination file
+                    }
+                } catch (cleanupError) {
+                    console.error('Cleanup error:', cleanupError);
+                }
+                res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to write file: ' + error.message })}\n\n`);
                 res.end();
             });
 
             // Track progress with throttling
             readStream.on('data', (chunk) => {
                 uploadedBytes += chunk.length;
-                const progress = (uploadedBytes / fileSize) * 100;
+                const progress = Math.round((uploadedBytes / fileSize) * 100);
                 
-                // Only send progress updates every 1% to reduce overhead
-                if (progress - lastProgressUpdate >= 1) {
-                    res.write(`data: ${JSON.stringify({ progress })}\n\n`);
+                // Only send progress updates every 2% to reduce overhead
+                if (progress - lastProgressUpdate >= 2) {
+                    res.write(`data: ${JSON.stringify({ type: 'progress', progress, uploadedBytes, fileSize })}\n\n`);
                     lastProgressUpdate = progress;
                 }
             });
 
             // Handle successful completion
             writeStream.on('finish', () => {
-                fs.unlinkSync(req.file.path); // Delete temporary file
+                try {
+                    if (fs.existsSync(req.file.path)) {
+                        fs.unlinkSync(req.file.path); // Delete temporary file
+                    }
+                } catch (cleanupError) {
+                    console.error('Cleanup error:', cleanupError);
+                }
                 
                 newVersion = {
                     id: Date.now().toString(),
@@ -370,7 +540,7 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
                 
                 writeJsonFile(projectsFile, data);
                 
-                res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
+                res.write(`data: ${JSON.stringify({ type: 'complete', success: true, version: newVersion })}\n\n`);
                 res.end();
             });
 
@@ -386,20 +556,24 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
         }
 
         // Send a dummy progress event for frontend compatibility
-        res.write(`data: ${JSON.stringify({ progress: 10 })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'progress', progress: 100 })}\n\n`);
 
         project.versions.push(newVersion);
         project.versions.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
         
         writeJsonFile(projectsFile, data);
         
-        res.write(`data: ${JSON.stringify({ success: true, version: newVersion })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'complete', success: true, version: newVersion })}\n\n`);
         res.end();
 
     } catch (error) {
         // In case of error, clean up the temporary file
-        if (req.file && req.file.path) {
-            fs.unlinkSync(req.file.path);
+        if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (cleanupError) {
+                console.error('Cleanup error:', cleanupError);
+            }
         }
         console.error('Upload error:', error);
         res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to upload file: ' + error.message })}\n\n`);
@@ -1098,6 +1272,193 @@ app.delete('/api/keys/:keyId', isAdmin, (req, res) => {
     }
 });
 
+// Chunk upload endpoint with smaller limits
+const chunkUpload = multer({
+    storage: multer.diskStorage({
+        destination: function (req, file, cb) {
+            const uploadDir = path.join(__dirname, 'uploads', 'temp');
+            fs.mkdirSync(uploadDir, { recursive: true });
+            cb(null, uploadDir);
+        },
+        filename: function (req, file, cb) {
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+        }
+    }),
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit for chunks
+        fieldSize: 10 * 1024 * 1024, // 10MB field size
+        fields: 10, // Max 10 fields
+        files: 1, // Max 1 file
+        parts: 20 // Max 20 parts
+    }
+});
+
+app.post('/api/upload-chunk', chunkUpload.single('file'), async (req, res) => {
+    try {
+        const { chunkIndex, totalChunks, originalFileName, originalFileSize } = req.body;
+        const { projectId, platform, version, buildNumber, notes, environment } = req.body;
+        
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No file uploaded' });
+        }
+        
+        if (!chunkIndex || !totalChunks || !originalFileName || !originalFileSize) {
+            return res.status(400).json({ success: false, error: 'Missing chunk information' });
+        }
+        
+        const chunkKey = `${originalFileName}-${originalFileSize}`;
+        
+        // Initialize chunk storage if not exists
+        if (!chunkStorage.has(chunkKey)) {
+            chunkStorage.set(chunkKey, {
+                chunks: new Array(parseInt(totalChunks)),
+                metadata: { projectId, platform, version, buildNumber, notes, environment },
+                originalFileName,
+                originalFileSize: parseInt(originalFileSize)
+            });
+        }
+        
+        const fileInfo = chunkStorage.get(chunkKey);
+        
+        // Store this chunk
+        fileInfo.chunks[parseInt(chunkIndex)] = req.file.path;
+        
+        // Check if all chunks are received
+        const receivedChunks = fileInfo.chunks.filter(chunk => chunk !== undefined).length;
+        
+        if (receivedChunks === parseInt(totalChunks)) {
+            // All chunks received, reassemble the file
+            const tempDir = path.join(__dirname, 'uploads', 'temp', 'chunks', Date.now().toString());
+            fs.mkdirSync(tempDir, { recursive: true });
+            
+            const reassembledPath = path.join(tempDir, originalFileName);
+            
+            try {
+                // Write chunks in order
+                const writeStream = fs.createWriteStream(reassembledPath);
+                
+                for (let i = 0; i < fileInfo.chunks.length; i++) {
+                    const chunkPath = fileInfo.chunks[i];
+                    if (fs.existsSync(chunkPath)) {
+                        const chunkData = fs.readFileSync(chunkPath);
+                        writeStream.write(chunkData);
+                        
+                        // Clean up chunk file
+                        fs.unlinkSync(chunkPath);
+                    } else {
+                        console.error(`Chunk file not found: ${chunkPath}`);
+                        throw new Error(`Chunk ${i} file not found`);
+                    }
+                }
+                
+                writeStream.end();
+                
+                // Wait for write stream to finish
+                await new Promise((resolve, reject) => {
+                    writeStream.on('finish', resolve);
+                    writeStream.on('error', reject);
+                });
+                
+                // Verify reassembled file exists
+                if (!fs.existsSync(reassembledPath)) {
+                    throw new Error('Reassembled file was not created');
+                }
+                
+                console.log(`File reassembled successfully: ${reassembledPath}`);
+                
+            } catch (error) {
+                console.error('Error reassembling file:', error);
+                // Clean up temp directory
+                if (fs.existsSync(tempDir)) {
+                    fs.rmSync(tempDir, { recursive: true, force: true });
+                }
+                throw error;
+            }
+            
+            // Create a mock req.file object for the reassembled file
+            const reassembledFile = {
+                originalname: originalFileName,
+                path: reassembledPath,
+                size: parseInt(originalFileSize)
+            };
+            
+            // Process the reassembled file using existing logic
+            const { projectId, platform, version, buildNumber, notes, environment } = fileInfo.metadata;
+            
+            // Ensure platform is defined and valid
+            const validPlatform = platform && typeof platform === 'string' ? platform.toLowerCase() : 'android';
+            
+            // Create version object
+            const newVersion = {
+                id: Date.now().toString(),
+                platform: validPlatform,
+                version: version || '1.0.0',
+                buildNumber: buildNumber || '',
+                environment: environment || 'production',
+                notes: notes || '',
+                file: originalFileName,
+                uploadedBy: req.session.username || 'Unknown',
+                uploadedAt: new Date().toISOString()
+            };
+            
+            // Move file to final location
+            const projectDir = path.join(__dirname, 'uploads', 'projects', 'TOD MENA');
+            const platformDir = path.join(projectDir, validPlatform);
+            fs.mkdirSync(platformDir, { recursive: true });
+            
+            const finalPath = path.join(platformDir, originalFileName);
+            
+            // Copy file with error handling
+            if (fs.existsSync(reassembledPath)) {
+                fs.copyFileSync(reassembledPath, finalPath);
+                console.log(`File copied to final location: ${finalPath}`);
+            } else {
+                throw new Error(`Reassembled file not found: ${reassembledPath}`);
+            }
+            
+            // Add to project
+            const projectsFile = path.join(__dirname, 'data', 'projects.json');
+            let data = readJsonFile(projectsFile);
+            const project = data.projects.find(p => p.id === projectId);
+            
+            if (project) {
+                if (!Array.isArray(project.versions)) {
+                    project.versions = [];
+                }
+                project.versions.unshift(newVersion);
+                writeJsonFile(projectsFile, data);
+            }
+            
+            // Clean up
+            fs.rmSync(tempDir, { recursive: true, force: true });
+            chunkStorage.delete(chunkKey);
+            
+            res.json({ 
+                success: true, 
+                message: `File reassembled and uploaded successfully from ${totalChunks} chunks`,
+                chunkIndex: parseInt(chunkIndex),
+                totalChunks: parseInt(totalChunks),
+                isComplete: true
+            });
+            
+        } else {
+            // Chunk received, waiting for more
+            res.json({ 
+                success: true, 
+                message: `Chunk ${parseInt(chunkIndex) + 1}/${totalChunks} uploaded successfully`,
+                chunkIndex: parseInt(chunkIndex),
+                totalChunks: parseInt(totalChunks),
+                isComplete: false
+            });
+        }
+        
+    } catch (error) {
+        console.error('Chunk upload error:', error);
+        res.status(500).json({ success: false, error: 'Failed to process chunk' });
+    }
+});
+
 // External Upload Endpoint
 app.post('/api/external/upload', apiKeyMiddleware, upload.single('file'), async (req, res) => {
     try {
@@ -1510,3 +1871,5 @@ app.post('/api/submit', async (req, res) => {
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
+
+
