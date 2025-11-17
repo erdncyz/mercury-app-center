@@ -387,6 +387,235 @@ chmod 666 data/users.json
 node server.js
 ```
 
+## Production Deployment
+
+### Reverse Proxy Configuration
+
+When deploying Mercury App Center in production, you'll typically use a reverse proxy (nginx, Apache, etc.) in front of the Node.js application. This is **critical** for handling large file uploads successfully.
+
+#### Why Reverse Proxy Configuration Matters
+
+Large file uploads (100MB+) can fail with `ERR_CONNECTION_RESET` errors if the reverse proxy is not properly configured. Common issues include:
+
+- **Default timeouts are too short** (typically 60 seconds)
+- **Request buffering** causes memory issues and delays
+- **Keep-alive settings** may terminate connections prematurely
+
+#### Nginx Configuration (Recommended)
+
+For detailed nginx configuration instructions, see [docs/nginx-config.md](docs/nginx-config.md).
+
+**Quick Setup for Upload Endpoints:**
+
+```nginx
+location /api/upload {
+    proxy_pass http://localhost:3000;
+    
+    # Timeout settings (30 minutes for large uploads)
+    proxy_connect_timeout 1800s;
+    proxy_send_timeout 1800s;
+    proxy_read_timeout 1800s;
+    send_timeout 1800s;
+    
+    # Disable buffering for streaming uploads
+    proxy_buffering off;
+    proxy_request_buffering off;
+    
+    # Increase body size limit (2GB max)
+    client_max_body_size 2048M;
+    client_body_timeout 1800s;
+    
+    # Keep-alive settings
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    
+    # Required headers
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# Apply same configuration to external upload endpoint
+location /api/external/upload {
+    proxy_pass http://localhost:3000;
+    
+    # Same timeout and buffering settings as above
+    proxy_connect_timeout 1800s;
+    proxy_send_timeout 1800s;
+    proxy_read_timeout 1800s;
+    send_timeout 1800s;
+    
+    proxy_buffering off;
+    proxy_request_buffering off;
+    
+    client_max_body_size 2048M;
+    client_body_timeout 1800s;
+    
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+**After updating nginx configuration:**
+
+```bash
+# Test configuration
+sudo nginx -t
+
+# Reload nginx
+sudo systemctl reload nginx
+```
+
+#### Apache Configuration
+
+If using Apache as a reverse proxy, add these settings to your VirtualHost configuration:
+
+```apache
+<Location /api/upload>
+    ProxyPass http://localhost:3000/api/upload
+    ProxyPassReverse http://localhost:3000/api/upload
+    
+    # Timeout settings (30 minutes)
+    ProxyTimeout 1800
+    TimeOut 1800
+    
+    # Disable buffering
+    SetEnv proxy-sendcl 1
+    
+    # Increase body size limit
+    LimitRequestBody 2147483648
+</Location>
+
+<Location /api/external/upload>
+    ProxyPass http://localhost:3000/api/external/upload
+    ProxyPassReverse http://localhost:3000/api/external/upload
+    
+    ProxyTimeout 1800
+    TimeOut 1800
+    SetEnv proxy-sendcl 1
+    LimitRequestBody 2147483648
+</Location>
+```
+
+### Troubleshooting Upload Issues
+
+#### Connection Reset Errors (ERR_CONNECTION_RESET)
+
+**Symptoms:**
+- Uploads fail after 60 seconds or during large file transfers
+- Browser shows "ERR_CONNECTION_RESET" or "Network error"
+- Server logs show "ECONNRESET" errors
+
+**Solutions:**
+
+1. **Check Reverse Proxy Configuration**
+   - Verify timeout settings are at least 1800 seconds (30 minutes)
+   - Ensure `proxy_buffering off` and `proxy_request_buffering off` are set
+   - Confirm `client_max_body_size` is at least 2048M
+
+2. **Verify Server Configuration**
+   - Check that the Node.js server is running and accessible
+   - Verify server timeout configuration using the health check endpoint:
+     ```bash
+     curl http://your-server.com/api/health/upload-config
+     ```
+
+3. **Test Without Reverse Proxy**
+   - Temporarily access the Node.js server directly (e.g., http://server:3000)
+   - If uploads work without the proxy, the issue is in the proxy configuration
+
+4. **Check Network and Firewall**
+   - Ensure no intermediate firewalls are terminating long connections
+   - Verify network stability for large file transfers
+   - Check if any load balancers have timeout settings
+
+5. **Monitor Upload Progress**
+   - Open browser developer console (F12) during upload
+   - Check for heartbeat messages every 10 seconds
+   - Look for progress updates every 2 seconds
+
+#### Slow Upload Speeds
+
+**Symptoms:**
+- Uploads take much longer than expected
+- Progress bar moves very slowly
+
+**Solutions:**
+
+1. **Check Buffering Settings**
+   - Ensure `proxy_request_buffering off` in nginx
+   - Buffering can cause the entire file to be stored before forwarding
+
+2. **Network Bandwidth**
+   - Test upload speed to the server
+   - Check for network congestion or bandwidth limits
+
+3. **Server Resources**
+   - Monitor CPU and memory usage during uploads
+   - Ensure sufficient disk I/O performance
+
+#### Upload Fails Immediately
+
+**Symptoms:**
+- Upload fails right after starting
+- Error message about file size or format
+
+**Solutions:**
+
+1. **Check File Size Limits**
+   - Maximum file size: 2GB
+   - Verify `client_max_body_size` in nginx matches this limit
+
+2. **Verify File Format**
+   - Supported formats: .apk, .aab, .ipa, .app
+   - Check that file extension is correct
+
+3. **Check Permissions**
+   - Ensure `uploads/` directory exists and is writable
+   - Verify Node.js process has write permissions
+
+#### Debugging Steps
+
+1. **Enable Detailed Logging**
+   - Check Node.js server logs for error details
+   - Review nginx error logs: `tail -f /var/log/nginx/error.log`
+
+2. **Test with Small Files First**
+   - Upload a small file (< 10MB) to verify basic functionality
+   - Gradually increase file size to identify threshold
+
+3. **Use Health Check Endpoint**
+   ```bash
+   curl http://your-server.com/api/health/upload-config
+   ```
+   This returns server configuration including timeout settings
+
+4. **Check Browser Console**
+   - Open Developer Tools (F12) → Console tab
+   - Look for error messages and network activity
+   - Monitor Network tab for request/response details
+
+### Deployment Checklist
+
+Before deploying to production:
+
+- [ ] Configure reverse proxy with proper timeout settings (see [docs/nginx-config.md](docs/nginx-config.md))
+- [ ] Set `client_max_body_size` to at least 2048M
+- [ ] Disable request buffering in reverse proxy
+- [ ] Test upload with files > 100MB
+- [ ] Verify health check endpoint is accessible
+- [ ] Set up monitoring for upload success/failure rates
+- [ ] Configure proper SSL/TLS certificates
+- [ ] Set up regular backups of `data/` directory
+- [ ] Configure firewall rules for required ports
+- [ ] Test upload from external network
+
 ## Configuration
 
 Server Configuration:

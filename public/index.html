@@ -1655,7 +1655,16 @@
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => {
                     controller.abort();
-                }, 30 * 60 * 1000); // 30 minutes timeout
+                }, 31 * 60 * 1000); // 31 minutes timeout (slightly longer than server)
+
+                // Initialize heartbeat monitoring
+                let lastHeartbeat = Date.now();
+                const heartbeatCheck = setInterval(() => {
+                    const timeSinceLastHeartbeat = Date.now() - lastHeartbeat;
+                    if (timeSinceLastHeartbeat > 30000) { // No update for 30 seconds
+                        console.warn(`No heartbeat received for ${Math.round(timeSinceLastHeartbeat / 1000)} seconds, connection may be stalled`);
+                    }
+                }, 15000); // Check every 15 seconds
 
                 const response = await fetch(`${CONFIG.baseUrl}/api/upload`, {
                     method: 'POST',
@@ -1667,6 +1676,7 @@
                 clearTimeout(timeoutId);
 
                 if (!response.ok) {
+                    clearInterval(heartbeatCheck);
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
@@ -1691,14 +1701,22 @@
                                 // Handle different message types
                                 if (data.type === 'connection') {
                                     console.log('Upload connection established');
+                                    lastHeartbeat = Date.now();
                                 }
                                 
                                 if (data.type === 'fileInfo') {
                                     console.log(`File size: ${(data.fileSize / 1024 / 1024).toFixed(2)} MB`);
+                                    lastHeartbeat = Date.now();
+                                }
+                                
+                                if (data.type === 'heartbeat') {
+                                    lastHeartbeat = Date.now();
+                                    console.log('Heartbeat received');
                                 }
                                 
                                 if (data.type === 'progress' && data.progress) {
                                     // Update progress text
+                                    lastHeartbeat = Date.now();
                                     const progressText = submitButton.querySelector('.progress-text');
                                     if (progressText) {
                                         const uploadedMB = (data.uploadedBytes / 1024 / 1024).toFixed(2);
@@ -1708,6 +1726,7 @@
                                 }
                                 
                                 if (data.type === 'complete' && data.success) {
+                                    clearInterval(heartbeatCheck);
                                     showNotification('File uploaded successfully', 'success');
                                     closeModal('uploadModal');
                                     showAllApps();
@@ -1717,6 +1736,7 @@
                                 }
                                 
                                 if (data.error) {
+                                    clearInterval(heartbeatCheck);
                                     showUploadError(data.error);
                                     submitButton.innerHTML = originalContent;
                                     submitButton.disabled = false;
@@ -1725,6 +1745,7 @@
                                 
                                 // Legacy support for old format
                                 if (data.progress && !data.type) {
+                                    lastHeartbeat = Date.now();
                                     const progressText = submitButton.querySelector('.progress-text');
                                     if (progressText) {
                                         progressText.textContent = `Uploading: ${Math.round(data.progress)}%`;
@@ -1732,6 +1753,7 @@
                                 }
                                 
                                 if (data.success && !data.type) {
+                                    clearInterval(heartbeatCheck);
                                     showNotification('File uploaded successfully', 'success');
                                     closeModal('uploadModal');
                                     showAllApps();
@@ -1748,6 +1770,7 @@
                 }
                 
                 // If we reach here without success, show error
+                clearInterval(heartbeatCheck);
                 showUploadError('Upload completed but no success response received');
                 submitButton.innerHTML = originalContent;
                 submitButton.disabled = false;
@@ -1755,14 +1778,45 @@
             } catch (error) {
                 console.error('Upload error:', error);
                 
+                // Enhanced error messages with specific handling
+                let errorMessage = '';
+                
                 if (error.name === 'AbortError') {
-                    showUploadError('Upload timed out. Please try again with a smaller file or check your connection.');
+                    errorMessage = 'Upload timed out after 31 minutes. This may indicate:\n' +
+                                 '• Very slow network connection\n' +
+                                 '• File size too large for current connection\n' +
+                                 '• Reverse proxy timeout configuration issue\n\n' +
+                                 'Please try again with a faster connection or contact your administrator.';
+                } else if (error.message.includes('ETIMEDOUT')) {
+                    errorMessage = 'Connection timed out. This usually means:\n' +
+                                 '• Network connection is unstable\n' +
+                                 '• Server is not responding\n' +
+                                 '• Firewall or proxy is blocking the connection\n\n' +
+                                 'Please check your network connection and try again.';
+                } else if (error.message.includes('ECONNRESET') || error.message.includes('connection reset')) {
+                    errorMessage = 'Connection was reset during upload. This may be caused by:\n' +
+                                 '• Reverse proxy (nginx/Apache) timeout settings\n' +
+                                 '• Network interruption\n' +
+                                 '• Server restart or maintenance\n\n' +
+                                 'If this persists, please contact your administrator to check reverse proxy configuration.';
                 } else if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                    showUploadError('Connection failed. Please check your internet connection and try again.');
+                    errorMessage = 'Network connection failed. Please check:\n' +
+                                 '• Your internet connection is active\n' +
+                                 '• The server is accessible\n' +
+                                 '• No firewall is blocking the connection\n\n' +
+                                 'Try refreshing the page and uploading again.';
+                } else if (error.message.includes('HTTP 413')) {
+                    errorMessage = 'File size exceeds server limit. The file is too large to upload.\n\n' +
+                                 'Please contact your administrator to increase the upload size limit.';
+                } else if (error.message.includes('HTTP 502') || error.message.includes('HTTP 504')) {
+                    errorMessage = 'Gateway timeout. The reverse proxy could not reach the server.\n\n' +
+                                 'Please contact your administrator to check server and proxy configuration.';
                 } else {
-                    showUploadError(`Upload failed: ${error.message}`);
+                    errorMessage = `Upload failed: ${error.message}\n\n` +
+                                 'If this problem persists, please contact your administrator.';
                 }
                 
+                showUploadError(errorMessage);
                 submitButton.innerHTML = originalContent;
                 submitButton.disabled = false;
             }

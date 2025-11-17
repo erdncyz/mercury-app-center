@@ -106,6 +106,8 @@ app.use((req, res, next) => {
     if (req.path === '/api/upload' || req.path === '/api/external/upload') {
         req.setTimeout(30 * 60 * 1000); // 30 minutes
         res.setTimeout(30 * 60 * 1000); // 30 minutes
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('Keep-Alive', 'timeout=1800'); // 30 minutes in seconds
     }
     next();
 });
@@ -248,6 +250,8 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
     // Send initial connection established message
     res.write(`data: ${JSON.stringify({ type: 'connection', message: 'Upload started' })}\n\n`);
 
+    const uploadStartTime = Date.now();
+    
     try {
         const { projectId, platform, version, buildNumber, notes, environment, url } = req.body;
         
@@ -341,7 +345,22 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
 
             // Set up error handling for both streams
             readStream.on('error', (error) => {
-                console.error('Read stream error:', error);
+                clearInterval(heartbeatInterval);
+                
+                // Enhanced error logging for read stream errors
+                console.error('Read stream error details:', {
+                    error: error.message,
+                    code: error.code,
+                    projectId,
+                    platform,
+                    fileSize,
+                    uploadedBytes,
+                    fileName,
+                    duration: Date.now() - uploadStartTime,
+                    clientIP: req.ip || req.connection.remoteAddress,
+                    timestamp: new Date().toISOString()
+                });
+                
                 try {
                     if (fs.existsSync(req.file.path)) {
                         fs.unlinkSync(req.file.path); // Clean up temp file
@@ -354,7 +373,23 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
             });
 
             writeStream.on('error', (error) => {
-                console.error('Write stream error:', error);
+                clearInterval(heartbeatInterval);
+                
+                // Enhanced error logging for write stream errors
+                console.error('Write stream error details:', {
+                    error: error.message,
+                    code: error.code,
+                    projectId,
+                    platform,
+                    fileSize,
+                    uploadedBytes,
+                    fileName,
+                    filePath,
+                    duration: Date.now() - uploadStartTime,
+                    clientIP: req.ip || req.connection.remoteAddress,
+                    timestamp: new Date().toISOString()
+                });
+                
                 try {
                     if (fs.existsSync(req.file.path)) {
                         fs.unlinkSync(req.file.path); // Clean up temp file
@@ -369,20 +404,37 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
                 res.end();
             });
 
-            // Track progress with throttling
+            // Track progress with time-based updates
+            let lastProgressTime = Date.now();
+            const PROGRESS_INTERVAL = 2000; // 2 seconds
+            
+            // Add heartbeat for very large files to keep connection alive
+            const heartbeatInterval = setInterval(() => {
+                res.write(`data: ${JSON.stringify({ type: 'heartbeat', timestamp: Date.now() })}\n\n`);
+            }, 10000); // Every 10 seconds
+            
             readStream.on('data', (chunk) => {
                 uploadedBytes += chunk.length;
                 const progress = Math.round((uploadedBytes / fileSize) * 100);
+                const now = Date.now();
                 
-                // Only send progress updates every 2% to reduce overhead
-                if (progress - lastProgressUpdate >= 2) {
-                    res.write(`data: ${JSON.stringify({ type: 'progress', progress, uploadedBytes, fileSize })}\n\n`);
+                // Send update every 2 seconds OR every 5% progress
+                if (now - lastProgressTime >= PROGRESS_INTERVAL || progress - lastProgressUpdate >= 5) {
+                    res.write(`data: ${JSON.stringify({ 
+                        type: 'progress', 
+                        progress, 
+                        uploadedBytes, 
+                        fileSize,
+                        timestamp: now
+                    })}\n\n`);
+                    lastProgressTime = now;
                     lastProgressUpdate = progress;
                 }
             });
 
             // Handle successful completion
             writeStream.on('finish', () => {
+                clearInterval(heartbeatInterval);
                 try {
                     if (fs.existsSync(req.file.path)) {
                         fs.unlinkSync(req.file.path); // Delete temporary file
@@ -447,7 +499,21 @@ app.post('/api/upload', isAdmin, upload.single('file'), (req, res) => {
                 console.error('Cleanup error:', cleanupError);
             }
         }
-        console.error('Upload error:', error);
+        
+        // Enhanced error logging with detailed context
+        console.error('Upload error details:', {
+            error: error.message,
+            code: error.code,
+            stack: error.stack,
+            projectId: req.body.projectId,
+            platform: req.body.platform,
+            fileSize: req.file?.size,
+            fileName: req.file?.originalname,
+            duration: Date.now() - uploadStartTime,
+            clientIP: req.ip || req.connection.remoteAddress,
+            timestamp: new Date().toISOString()
+        });
+        
         res.write(`data: ${JSON.stringify({ success: false, error: 'Failed to upload file: ' + error.message })}\n\n`);
         res.end();
     }
@@ -1244,11 +1310,34 @@ app.post('/api/external/upload', apiKeyMiddleware, upload.single('file'), async 
     }
 });
 
+// Health check endpoint for upload configuration
+app.get('/api/health/upload-config', (req, res) => {
+    const config = {
+        serverTimeout: '30 minutes (1800000ms)',
+        keepAliveTimeout: '30 minutes (1800000ms)',
+        headersTimeout: '30 minutes + 1 second (1801000ms)',
+        maxFileSize: '2GB',
+        supportedFormats: ['.ipa', '.apk', '.aab', '.app'],
+        uploadEndpoints: ['/api/upload', '/api/external/upload']
+    };
+    
+    res.json({
+        status: 'ok',
+        config,
+        timestamp: new Date().toISOString()
+    });
+});
+
 // Get port from config
-app.listen(config.server.port, () => {
+const server = app.listen(config.server.port, () => {
     console.log(`Server running on ${config.urls.base()}`);
     console.log(`Local IP address: ${config.server.host}`);
 });
+
+// Configure server timeouts for large file uploads (30 minutes)
+server.setTimeout(30 * 60 * 1000); // 30 minutes
+server.keepAliveTimeout = 30 * 60 * 1000; // 30 minutes
+server.headersTimeout = 30 * 60 * 1000 + 1000; // Slightly more than keepAliveTimeout
 
 // Get a list of all project IDs and names (for admin UI)
 app.get('/api/all-projects', isAdmin, async (req, res) => {
