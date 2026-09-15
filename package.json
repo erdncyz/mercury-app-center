@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "setup": "node setup.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test release-model.test.js bulk-cleanup.test.js sw.test.js"
   },
   "dependencies": {
     "axios": "^1.11.0",

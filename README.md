@@ -49,12 +49,39 @@ Mercury App Center is a centralized platform for managing and distributing your 
 - Environment management (Production/Test/Regression)
 
 ### User Interface
-- Modern, responsive design
-- Real-time updates
-- Search and filter capabilities
-- Recent uploads tracking
-- Version history
-- Platform-specific button controls
+- Responsive project sidebar with per-user pinned projects
+- Search across projects, versions, build numbers and release notes
+- Icon-based platform selection and combined environment filtering
+- Newest-first release table, pagination and release detail links
+- Light/dark themes and skeleton loading with reduced-motion support
+- Searchable, paginated user management with typed deletion confirmation
+- Admin-only bulk release cleanup by project, age and record count
+
+Bulk cleanup protects the latest release per platform/environment by default.
+Admins review and select records, then type the project name to confirm. Requests
+use the existing admin-only deletion endpoint sequentially and stop on the first
+failure. Completed deletions cannot be rolled back. The client rechecks access
+and selected records before starting; this is not an atomic server transaction.
+
+The frontend uses the current origin and retains the existing upload/API contract.
+Download buffering avoids an additional file-sized array copy. The service worker
+retires old Mercury caches so outdated UI is not served; offline UI caching is
+disabled. No backend transfer optimization is included in this UI update.
+
+### Frontend Tests And Assets
+
+Run the dependency-free frontend model and service-worker tests with Node.js 18+
+(the suite uses synthetic fixtures, not production data):
+
+```sh
+npm test
+```
+
+Icons and fonts are served locally. Bundled assets are Lucide 1.46.0 and
+Fontsource Manrope, IBM Plex Sans and IBM Plex Mono 5.3.0. Their upstream licenses
+are included in `public/vendor/lucide-LICENSE` and `public/fonts/*/LICENSE`.
+These static assets allow the existing `npm start` workflow without an extra
+frontend build step.
 
 ### Onvo TV Platform Support
 

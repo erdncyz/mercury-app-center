@@ -21,7 +21,6 @@
             
             if (shouldUseDark) {
                 document.documentElement.setAttribute('data-theme', 'dark');
-                document.body.setAttribute('data-theme', 'dark');
                 // Update theme color for dark mode
                 document.querySelector('meta[name="theme-color"]').setAttribute('content', '#181a1b');
             } else {
@@ -329,15 +328,47 @@
             height: 14px;
         }
     </style>
+    <link rel="stylesheet" href="workspace.css">
+    <script defer src="vendor/lucide.js"></script>
+    <script defer src="release-model.js"></script>
+    <script defer src="workspace.js"></script>
+    <script defer src="users-admin.js"></script>
+    <script defer src="bulk-cleanup-model.js"></script>
+    <script defer src="bulk-cleanup.js"></script>
 </head>
 <body>
-    <div id="loginContainer">
+    <div id="sessionLoading" role="status" aria-label="Loading workspace" aria-busy="true">
+        <span class="sr-only">Loading workspace...</span>
+        <div class="skeleton-app-header" aria-hidden="true"><img src="mercury-icon.png" alt=""><span class="skeleton-block skeleton-heading"></span></div>
+        <div class="workspace-layout" aria-hidden="true">
+            <div class="project-sidebar skeleton-sidebar">
+                <span class="skeleton-block skeleton-heading"></span>
+                <div class="skeleton-projects"><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span></div>
+            </div>
+            <div class="release-workspace">
+                <div class="skeleton-intro"><span class="skeleton-block skeleton-heading"></span><span class="skeleton-block skeleton-caption"></span></div>
+                <div class="skeleton-block skeleton-search"></div>
+                <div class="skeleton-filter-row"><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span></div>
+                <div class="skeleton-filter-row"><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span></div>
+                <div class="skeleton-releases" aria-hidden="true">
+                    <div class="skeleton-release-row"><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span></div>
+                    <div class="skeleton-release-row"><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span></div>
+                    <div class="skeleton-release-row"><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span></div>
+                    <div class="skeleton-release-row"><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span></div>
+                    <div class="skeleton-release-row"><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span></div>
+                    <div class="skeleton-release-row"><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span><span class="skeleton-block"></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="loginContainer" style="display: none;">
         <div class="login-theme-toggle">
             <button id="loginDarkModeToggle" title="Toggle dark mode">🌙</button>
         </div>
         <div class="login-box">
             <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'%3E%3Cpath d='M12 2c-4.4 0-8 3.6-8 8s3.6 8 8 8 8-3.6 8-8-3.6-8-8-8zm0 14c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6z'/%3E%3Ccircle cx='12' cy='8' r='2'/%3E%3Crect x='11' y='10' width='2' height='6'/%3E%3Crect x='11' y='16' width='2' height='2'/%3E%3C/svg%3E" alt="Mercury Icon" class="login-icon">
             <h2>Mercury App Center</h2>
+            <p class="developer-credit">Developed by Erdinç Yılmaz</p>
             <div class="auth-toggle">
                 <button class="auth-toggle-btn active" data-target="loginForm">Login</button>
                 <button class="auth-toggle-btn" data-target="registerForm">Register</button>
@@ -379,34 +410,69 @@
         <header>
             <div class="header-left">
                 <img src="mercury-icon.png" alt="Mercury Icon" class="header-icon">
-                <h1>Mercury App Center</h1>
+                <div class="header-brand"><h1>Mercury App Center</h1><p class="developer-credit">Developed by Erdinç Yılmaz</p></div>
             </div>
             <div class="header-right">
                 <span id="userDisplay"></span>
-                <button id="darkModeToggle" title="Toggle dark mode" style="margin-right: 0.5rem;">🌙</button>
-                <button id="adminPanelButton" style="display: none;" onclick="showAdminPanel()">Admin Panel</button>
-                <button onclick="handleLogout()">Logout</button>
+                <button id="darkModeToggle" class="icon-button" title="Toggle theme" aria-label="Toggle theme"><i data-lucide="moon"></i></button>
+                <button id="adminPanelButton" style="display: none;" onclick="showAdminPanel()" title="Administration" aria-label="Administration"><i data-lucide="settings-2"></i><span>Admin</span></button>
+                <button onclick="handleLogout()" title="Sign out" aria-label="Sign out"><i data-lucide="log-out"></i></button>
             </div>
         </header>
 
         <main>
-            <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="Search apps..." oninput="filterUploads()">
-                <select id="osFilter" onchange="filterUploads()">
-                    <option value="all">All OS</option>
-                    <option value="ios">iOS</option>
-                    <option value="android">Android</option>
-                    <option value="tvos">Apple TV</option>
-                    <option value="androidtv">Android TV</option>
-                    <option value="huawei">Huawei</option>
-                </select>
+            <div class="mobile-project-bar">
+                <button id="projectMenuToggle" aria-expanded="false" aria-controls="projectSidebar"><i data-lucide="panel-left"></i>Projects</button>
+                <span id="mobileProjectName">All releases</span>
             </div>
-
-            <div class="create-project">
-                <button onclick="showCreateProjectModal()">Create New Project</button>
+            <div class="workspace-layout">
+                <aside id="projectSidebar" class="project-sidebar" aria-label="Project navigation">
+                    <div class="sidebar-label"><span>WORKSPACE</span><i data-lucide="layers-2"></i></div>
+                    <button id="allProjectsButton" class="all-projects-button" aria-current="page"><i data-lucide="layout-grid"></i><span>All releases</span><span id="projectTotal" class="count">0</span></button>
+                    <div class="sidebar-section-title"><h2>Projects</h2><div class="create-project" style="display:none"><button onclick="showCreateProjectModal()" class="icon-button" title="New project" aria-label="New project"><i data-lucide="plus"></i></button></div></div>
+                    <div class="project-search"><i data-lucide="search"></i><input id="projectSearch" type="search" placeholder="Find a project" aria-label="Find a project" autocomplete="off"></div>
+                    <nav id="projectList" aria-label="Projects"></nav>
+                    <div class="sidebar-footer"><img src="mercury-icon.png" alt=""><div><strong>Mercury</strong><span>App distribution</span></div></div>
+                </aside>
+                <section class="release-workspace" aria-labelledby="workspaceTitle">
+                    <div class="workspace-heading">
+                        <div><div class="workspace-eyebrow">APP DISTRIBUTION</div><h2 id="workspaceTitle">All releases</h2><p id="workspaceSummary" aria-live="polite">Loading projects...</p></div>
+                        <div class="workspace-actions"><button id="refreshProjects" class="icon-button" title="Refresh releases" aria-label="Refresh releases"><i data-lucide="refresh-cw"></i></button><button id="uploadSelected" class="primary-action" title="Upload version" aria-label="Upload version" hidden><i data-lucide="upload"></i><span>Upload version</span></button><button id="deleteSelected" class="icon-button danger-action" title="Delete project" aria-label="Delete project" hidden><i data-lucide="trash-2"></i></button></div>
+                    </div>
+                    <div class="release-search"><i data-lucide="search"></i><input type="search" id="searchInput" placeholder="Search version, build, project or release notes..." aria-label="Search releases" autocomplete="off"><button id="clearSearch" class="icon-button" aria-label="Clear release search" title="Clear search" hidden><i data-lucide="x"></i></button></div>
+                    <div class="release-filters">
+                        <input type="hidden" id="osFilter" value="all">
+                        <div id="platformFilters" class="environment-tabs platform-tabs" role="group" aria-label="Platform">
+                            <button data-platform="all" aria-pressed="true"><i data-lucide="layout-grid" aria-hidden="true"></i>All platforms</button>
+                            <button data-platform="ios" aria-pressed="false"><i data-lucide="smartphone" aria-hidden="true"></i>iOS</button>
+                            <button data-platform="android" aria-pressed="false"><i data-lucide="tablet-smartphone" aria-hidden="true"></i>Android</button>
+                            <button data-platform="tvos" aria-pressed="false"><i data-lucide="tv" aria-hidden="true"></i>Apple TV</button>
+                            <button data-platform="androidtv" aria-pressed="false"><i data-lucide="monitor-play" aria-hidden="true"></i>Android TV</button>
+                            <button data-platform="huawei" aria-pressed="false"><i data-lucide="globe" aria-hidden="true"></i>Huawei</button>
+                            <button data-platform="onvotv" aria-pressed="false"><i data-lucide="tv-minimal" aria-hidden="true"></i>Onvo TV</button>
+                        </div>
+                        <div id="environmentFilters" class="environment-tabs" role="group" aria-label="Environment">
+                            <button data-environment="all" aria-pressed="true">All environments</button>
+                            <button data-environment="production" aria-pressed="false"><span class="status-dot production"></span>Production</button>
+                            <button data-environment="test" aria-pressed="false"><span class="status-dot test"></span>Test</button>
+                            <button data-environment="regression" aria-pressed="false"><span class="status-dot regression"></span>Regression</button>
+                        </div>
+                        <div class="select-filters">
+                            <select id="releaseSort" aria-label="Sort releases"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select>
+                        </div>
+                    </div>
+                    <div class="results-heading"><span id="resultCount" role="status">Loading releases...</span><button id="resetFilters" hidden><i data-lucide="filter-x"></i>Clear filters</button></div>
+                    <div id="allApps" aria-busy="true"></div>
+                    <div id="releasePagination" class="release-pagination" hidden>
+                        <label>Rows per page <select id="pageSize" aria-label="Rows per page"><option>20</option><option>50</option><option>100</option></select></label>
+                        <div><span id="pageRange"></span><button id="previousPage" class="icon-button" title="Previous page" aria-label="Previous page"><i data-lucide="chevron-left"></i></button><span id="pageNumber"></span><button id="nextPage" class="icon-button" title="Next page" aria-label="Next page"><i data-lucide="chevron-right"></i></button></div>
+                    </div>
+                </section>
             </div>
-
-            <div id="allApps"></div>
+            <dialog id="releaseDetails" aria-labelledby="releaseDetailsTitle">
+                <div class="detail-topbar"><span>RELEASE DETAILS</span><button id="closeReleaseDetails" class="icon-button" title="Close details" aria-label="Close details"><i data-lucide="x"></i></button></div>
+                <div id="releaseDetailsBody"></div>
+            </dialog>
 
             <div id="createProjectModal" class="modal">
                 <div class="modal-content">
@@ -507,15 +573,17 @@
 
             <div id="usersAdminModal" class="modal">
                 <div class="modal-content">
-                    <div class="modal-close" onclick="closeModal('usersAdminModal')"></div>
+                    <button class="users-close icon-button" type="button" title="Close administration" aria-label="Close administration" onclick="closeModal('usersAdminModal')"><i data-lucide="x" aria-hidden="true"></i></button>
                     <div class="admin-tabs">
                         <button class="tab-btn active" onclick="showTab('userManagement')">User Management</button>
                         <button class="tab-btn" onclick="showTab('apiKeyManagement')">API Keys</button>
+                        <button id="bulkCleanupTab" class="tab-btn" onclick="showTab('bulkCleanup')" hidden><i data-lucide="trash-2" aria-hidden="true"></i>Bulk cleanup</button>
                     </div>
                     <div id="userManagement" class="tab-content active">
-                        <h2>User Management</h2>
-                        <p>Approve or reject pending user registrations</p>
-                        <div id="usersList"></div>
+                        <div class="users-heading"><div><h2>Users</h2><p id="usersSummary" role="status">Loading users...</p></div><button id="refreshUsers" class="icon-button" type="button" aria-label="Refresh users" title="Refresh users"><i data-lucide="refresh-cw" aria-hidden="true"></i></button></div>
+                        <div class="users-toolbar"><label class="users-search"><i data-lucide="search" aria-hidden="true"></i><input id="userSearch" type="search" aria-label="Search users" placeholder="Search name, email or project" autocomplete="off"></label><select id="userStatusFilter" aria-label="Filter users"><option value="all">All users</option><option value="pending">Pending approval</option><option value="approved">Approved</option><option value="admin">Administrators</option></select></div>
+                        <div id="usersList" aria-busy="false"></div>
+                        <div id="usersPagination" class="users-pagination" hidden><span id="usersRange"></span><div><button id="usersPrevious" class="icon-button" aria-label="Previous users" title="Previous page"><i data-lucide="chevron-left" aria-hidden="true"></i></button><span id="usersPage"></span><button id="usersNext" class="icon-button" aria-label="Next users" title="Next page"><i data-lucide="chevron-right" aria-hidden="true"></i></button></div></div>
                     </div>
                     <div id="apiKeyManagement" class="tab-content">
                         <h2>API Key Management</h2>
@@ -534,6 +602,18 @@
                                 <tbody></tbody>
                             </table>
                         </div>
+                    </div>
+                    <div id="bulkCleanup" class="tab-content">
+                        <div class="users-heading"><div><h2>Bulk release cleanup</h2><p id="cleanupSummary" role="status">Select a project</p></div><button id="reloadCleanup" class="icon-button" title="Refresh projects" aria-label="Refresh cleanup projects"><i data-lucide="refresh-cw" aria-hidden="true"></i></button></div>
+                        <div class="cleanup-filters">
+                            <label>Project<select id="cleanupProject"><option value="">Select a project</option></select></label>
+                            <label>Uploaded before<input id="cleanupBefore" type="date"></label>
+                            <label>Oldest records to review<input id="cleanupLimit" type="number" min="1" max="100" value="20"></label>
+                        </div>
+                        <label class="cleanup-protection"><input id="cleanupKeepLatest" type="checkbox" checked>Keep the latest release for each platform and environment</label>
+                        <div id="cleanupMessage" class="cleanup-message" role="status" hidden></div>
+                        <div id="cleanupList" aria-busy="false"><div class="users-empty">Select a project</div></div>
+                        <div class="cleanup-footer"><span id="cleanupSelectionCount" role="status">0 selected</span><button id="reviewCleanup" class="cleanup-danger" disabled><i data-lucide="trash-2" aria-hidden="true"></i>Review deletion</button></div>
                     </div>
                     <div class="modal-actions">
                         <button type="button" class="cancel-btn" onclick="closeModal('usersAdminModal')">Close</button>
@@ -577,6 +657,30 @@
     </div>
 
     <!-- Notification Container -->
+    <dialog id="bulkCleanupDialog" aria-labelledby="cleanupConfirmTitle" aria-describedby="cleanupConfirmDescription">
+        <form id="cleanupConfirmForm">
+            <h2 id="cleanupConfirmTitle">Delete selected releases?</h2>
+            <p id="cleanupConfirmDescription"></p>
+            <p class="users-error">This cannot be undone. The project itself will not be deleted.</p>
+            <label for="cleanupConfirmName">Type the project name to confirm</label>
+            <input id="cleanupConfirmName" autocomplete="off" spellcheck="false" required>
+            <p id="cleanupProgress" role="status" hidden></p>
+            <p id="cleanupConfirmError" class="users-error" role="alert" hidden></p>
+            <div class="delete-user-actions"><button id="cancelCleanup" type="button">Cancel</button><button id="stopCleanup" type="button" hidden>Stop after current</button><button id="confirmCleanup" class="cleanup-danger" type="submit" disabled>Delete releases</button></div>
+        </form>
+    </dialog>
+    <dialog id="deleteUserDialog" aria-labelledby="deleteUserTitle" aria-describedby="deleteUserDescription">
+        <form id="deleteUserForm">
+            <div class="delete-user-symbol"><i data-lucide="user-round-x" aria-hidden="true"></i></div>
+            <h2 id="deleteUserTitle">Delete user</h2>
+            <p id="deleteUserDescription">This permanently removes the account and its project access. Uploaded releases are not deleted.</p>
+            <p class="delete-user-identity" id="deleteUserIdentity"></p>
+            <label for="deleteUserConfirmName">Type the username to confirm</label>
+            <input id="deleteUserConfirmName" autocomplete="off" spellcheck="false" required>
+            <p id="deleteUserError" class="users-error" role="alert" hidden></p>
+            <div class="delete-user-actions"><button id="cancelDeleteUser" type="button">Cancel</button><button id="confirmDeleteUser" type="submit" disabled>Delete user</button></div>
+        </form>
+    </dialog>
     <div id="notification-container" aria-live="assertive" aria-atomic="true"></div>
 
     <!-- PWA Install Instructions Modal -->
@@ -672,7 +776,7 @@
 
     <script>
         const CONFIG = {
-            baseUrl: `http://${location.hostname}:${location.port || 80}`
+            baseUrl: location.origin
         };
 
         let currentEditingUserId = null; // Moved declaration here
@@ -744,32 +848,7 @@
             }
         }
         
-        function checkAndShowPWAInstructions() {
-            // Only show if not already shown and not in standalone mode (already installed)
-            const alreadyShown = localStorage.getItem('pwaInstructionsShown');
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-            const isIOSStandalone = window.navigator.standalone;
-            
-            console.log('PWA Instructions Check:', {
-                alreadyShown,
-                isStandalone,
-                isIOSStandalone
-            });
-            
-            if (!alreadyShown && !isStandalone && !isIOSStandalone) {
-                // Show after a short delay to let the page load
-                console.log('Showing PWA instructions...');
-                setTimeout(() => {
-                    showPWAInstructions();
-                }, 2000);
-            } else {
-                console.log('PWA instructions not shown because:', {
-                    alreadyShown: !!alreadyShown,
-                    isStandalone,
-                    isIOSStandalone
-                });
-            }
-        }
+        function checkAndShowPWAInstructions() {}
 
         // When document is ready
         document.addEventListener('DOMContentLoaded', async function() {
@@ -796,15 +875,6 @@
             // Platform seçimini dinle
             document.getElementById('platformSelect').addEventListener('change', toggleFileOrUrlInput);
             
-            if (localStorage.getItem('isLoggedIn') === 'true') {
-                document.getElementById('loginContainer').style.display = 'none';
-                document.getElementById('mainContainer').style.display = 'block';
-                updateUsername();
-                showAllApps();
-                // Check if we should show PWA instructions
-                checkAndShowPWAInstructions();
-            }
-            
             await checkLoginStatus();
             setupModalBackgroundClose();
             
@@ -822,11 +892,13 @@
                 
                 // Update both toggle buttons if they exist
                 if (darkModeToggle) {
-                    darkModeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+                    darkModeToggle.innerHTML = `<i data-lucide="${theme === 'dark' ? 'sun' : 'moon'}" aria-hidden="true"></i>`;
                 }
                 if (loginDarkModeToggle) {
-                    loginDarkModeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+                    loginDarkModeToggle.innerHTML = `<i data-lucide="${theme === 'dark' ? 'sun' : 'moon'}" aria-hidden="true"></i>`;
+                    loginDarkModeToggle.setAttribute('aria-label', 'Toggle theme');
                 }
+                lucide.createIcons({ attrs: { 'aria-hidden': 'true' } });
                 
                 // Update theme-color meta tag for PWA status bar
                 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
@@ -972,6 +1044,7 @@
                     localStorage.removeItem('userRole');
                     document.getElementById('loginContainer').style.display = 'block';
                     document.getElementById('mainContainer').style.display = 'none';
+                    MercuryWorkspace.reset();
                     showNotification('Logged out successfully', 'success');
                 }
             } catch (error) {
@@ -998,11 +1071,13 @@
                     localStorage.setItem('isLoggedIn', 'true');
                     localStorage.setItem('username', data.username);
                     localStorage.setItem('userRole', data.userRole);
+                    document.getElementById('sessionLoading').hidden = true;
                     document.getElementById('loginContainer').style.display = 'none';
                     document.getElementById('mainContainer').style.display = 'block';
                     updateUsername();
                     await checkAdminStatus();
                     await updateUserPermissions();
+                    await showAllApps();
                     // Check if we should show PWA instructions after session check
                     checkAndShowPWAInstructions();
                 } else {
@@ -1016,6 +1091,9 @@
                 console.error('Login status check error:', error);
                 document.getElementById('loginContainer').style.display = 'block';
                 document.getElementById('mainContainer').style.display = 'none';
+            } finally {
+                document.getElementById('sessionLoading').hidden = true;
+                document.getElementById('sessionLoading').setAttribute('aria-busy', 'false');
             }
         }
 
@@ -1871,10 +1949,10 @@
             }, 3000);
         }
 
-        async function downloadVersion(projectId, versionId) {
+        async function downloadVersion(projectId, versionId, trigger = null) {
             try {
                 // Get the button that was clicked
-                const clickedButton = event.target.closest('button');
+                const clickedButton = trigger || window.event?.target?.closest('button');
                 
                 // Disable the button and show loading state
                 if (clickedButton) {
@@ -1931,16 +2009,7 @@
                         }
                     }
 
-                    // Concatenate chunks into a single Uint8Array
-                    const chunksAll = new Uint8Array(receivedLength);
-                    let position = 0;
-                    for(let chunk of chunks) {
-                        chunksAll.set(chunk, position);
-                        position += chunk.length;
-                    }
-
-                    // Create and download blob
-                    const blob = new Blob([chunksAll]);
+                    const blob = new Blob(chunks);
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.style.display = 'none';
@@ -1966,7 +2035,7 @@
                 showNotification(error.message, 'error');
                 
                 // If error occurs, restore the button
-                const clickedButton = event.target.closest('button');
+                const clickedButton = trigger || window.event?.target?.closest('button');
                 if (clickedButton) {
                     const defaultIcon = `<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
@@ -2284,6 +2353,7 @@
                 if (data.isAdmin) {
                     // Show admin panel button
                     document.getElementById('adminPanelButton').style.display = 'inline-block';
+                    document.getElementById('bulkCleanupTab').hidden = false;
                     
                     // Show edit buttons for admin users
                     document.querySelectorAll('.edit-button').forEach(button => {
@@ -2291,6 +2361,7 @@
                     });
                 } else {
                     document.getElementById('adminPanelButton').style.display = 'none';
+                    document.getElementById('bulkCleanupTab').hidden = true;
                     
                     // Hide edit buttons for non-admin users
                     document.querySelectorAll('.edit-button').forEach(button => {
@@ -2643,38 +2714,6 @@
             // ... existing code ...
         }
 
-        // First get the current version
-        fetch(`${CONFIG.baseUrl}/api/projects/${projectId}/versions/${versionId}`, {
-            credentials: 'include'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.version) {
-                const version = data.version;
-                
-                // Open edit modal
-                const modal = document.getElementById('editVersionModal') || createEditVersionModal();
-                
-                // Fill form fields
-                document.getElementById('editVersionId').value = version.id;
-                document.getElementById('editProjectId').value = projectId;
-                document.getElementById('editVersionNumber').value = version.version || '';
-                document.getElementById('editEnvironment').value = version.environment || 'production';
-                document.getElementById('editNotes').value = version.notes || '';
-                document.getElementById('editUrl').value = version.url || '';
-                document.getElementById('editPlatform').value = version.platform || '';
-                
-                // Show modal
-                modal.style.display = 'flex';
-            } else {
-                showNotification('Version information could not be retrieved', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Version edit error:', error);
-            showNotification('Version editing error', 'error');
-        });
-
         // Create edit version modal if not exists
         function createEditVersionModal() {
             const modal = document.createElement('div');
@@ -2926,6 +2965,8 @@
                 loadUsers();
             } else if (tabName === 'apiKeyManagement') {
                 loadApiKeys();
+            } else if (tabName === 'bulkCleanup') {
+                MercuryBulkCleanup.load();
             }
         }
 
@@ -3373,7 +3414,7 @@
         }
 
         // Service Worker Registration for PWA
-        if ('serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator && !['127.0.0.1', 'localhost'].includes(location.hostname)) {
             window.addEventListener('load', function() {
                 navigator.serviceWorker.register('/sw.js')
                     .then(function(registration) {

@@ -7,6 +7,15 @@ package-lock.json
 yarn.lock
 
 # Environment files
+*.pem
+*.key
+*.p12
+*.pfx
+*.apk
+*.aab
+*.ipa
+/backups/
+*.bak
 .env
 .env.local
 .env.*.local
